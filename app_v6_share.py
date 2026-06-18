@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import os
 import base64
+import html
 
 # .env 파일에서 API 키 자동 로드 (있으면 — 매번 set 안 해도 됨)
 try:
@@ -460,7 +461,7 @@ with st.sidebar:
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
     menu = st.radio("", [
         "📊 Overview", "🛢 원자재", "🚢 Freight",
-        "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
+        "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
     ], label_visibility="collapsed")
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -705,6 +706,58 @@ elif menu == "🚢 Freight":
                 st.markdown(f'<div class="ai">{a}</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="placeholder"><span style="font-size:26px">🔍</span><span>버튼을 눌러 분석 시작</span></div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 📰 FCW NEWS
+# ════════════════════════════════════════════════════════════
+elif menu == "📰 FCW News":
+    st.markdown('<div class="sec"><span class="sec-t">Floor Covering Weekly</span><span class="sec-s">바닥재 산업 최신 기사 · FCW</span><span class="live"><span class="dot"></span>Live</span></div>', unsafe_allow_html=True)
+
+    fcw_category = st.radio(
+        "FCW Category",
+        ["All Latest", "Features", "Products", "Retail", "Business Builder", "Sustainability", "Technology", "Style & Design"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="fcw_category",
+    )
+    fcw_items = llm.fetch_fcw_news(fcw_category, limit=14)
+
+    left, right = st.columns([2, 1], gap="medium")
+    with left:
+        st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Latest Articles</span><span class="p-m">{fcw_category}</span></div><div class="p-body">', unsafe_allow_html=True)
+        for item in fcw_items:
+            title = html.escape(item.get("title", ""))
+            link = html.escape(item.get("link", ""))
+            published = html.escape(item.get("published", ""))
+            summary = html.escape(item.get("summary", ""))
+            date_html = f"<span>{published}</span>" if published else "<span>Latest</span>"
+            summary_html = f"<div style='font-size:11px;color:{T['text2']};line-height:1.55;margin-top:4px'>{summary}</div>" if summary else ""
+            st.markdown(
+                f"""
+                <div class="news">
+                  <a href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>
+                  <div class="news-t">{date_html} · Floor Covering Weekly</div>
+                  {summary_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Industry Watch</span><span class="p-m">Use case</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="summary-grid" style="grid-template-columns:1fr;">
+              <div class="summary-card"><div class="summary-k">Why FCW</div><div class="summary-v">미국 바닥재 업계의 제품, 리테일, 시공, 지속가능성, 기술 동향을 빠르게 확인하는 용도로 볼 수 있습니다.</div></div>
+              <div class="summary-card"><div class="summary-k">Sales Signal</div><div class="summary-v">LVT, resilient, retail, builder 관련 기사는 미국 거래선 미팅 전 시장 분위기 체크에 활용하기 좋습니다.</div></div>
+              <div class="summary-card"><div class="summary-k">Refresh</div><div class="summary-v">기사 목록은 약 30분 단위로 갱신됩니다. 원문 제목을 누르면 FCW 사이트가 새 창으로 열립니다.</div></div>
+            </div>
+            <a href="https://www.floorcoveringweekly.com/" target="_blank" rel="noopener noreferrer" style="color:{T['accent']};font-size:12px;text-decoration:none;font-weight:700;">FCW 원문 사이트 열기 →</a>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════

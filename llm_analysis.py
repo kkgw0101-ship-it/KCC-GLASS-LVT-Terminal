@@ -7,14 +7,29 @@ LVT Intelligence Dashboard — LLM 분석 모듈
 
 import feedparser
 import anthropic
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
 import streamlit as st
+from urllib.parse import urljoin
+import re
 
 # ── 뉴스 RSS 피드 (모두 무료, Google News 기반) ─────────────────
 NEWS_FEEDS = {
     "freight": "https://news.google.com/rss/search?q=container+freight+shipping+rate+SCFI&hl=en-US&gl=US&ceid=US:en",
     "tariff":  "https://news.google.com/rss/search?q=US+tariff+import+flooring+vinyl&hl=en-US&gl=US&ceid=US:en",
     "housing": "https://news.google.com/rss/search?q=US+housing+market+mortgage+construction&hl=en-US&gl=US&ceid=US:en",
+}
+
+FCW_URLS = {
+    "All Latest": "https://www.floorcoveringweekly.com/",
+    "Features": "https://www.floorcoveringweekly.com/main/features",
+    "Products": "https://www.floorcoveringweekly.com/main/products2",
+    "Retail": "https://www.floorcoveringweekly.com/main/retail",
+    "Business Builder": "https://www.floorcoveringweekly.com/main/business-builder",
+    "Sustainability": "https://www.floorcoveringweekly.com/main/sustainability",
+    "Technology": "https://www.floorcoveringweekly.com/main/technology",
+    "Style & Design": "https://www.floorcoveringweekly.com/main/style-design",
 }
 
 
@@ -32,6 +47,71 @@ def fetch_news(category="freight", limit=8):
             "source": e.get("source", {}).get("title", "") if hasattr(e, "source") else "",
         })
     return items
+
+
+@st.cache_data(ttl=1800)
+def fetch_fcw_news(category="All Latest", limit=12):
+    """Floor Covering Weekly 최신 기사 목록을 가져옵니다."""
+    url = FCW_URLS.get(category, FCW_URLS["All Latest"])
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+        )
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=12)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+    except Exception as e:
+        return [{"title": "FCW 기사를 불러오지 못했습니다.", "link": url, "published": "", "summary": str(e), "source": "FCW"}]
+
+    date_re = re.compile(
+        r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), "
+        r"[A-Za-z]+ \d{1,2}, \d{4}"
+    )
+    skip_titles = {
+        "Features", "News", "Products", "Business Builder", "Retail", "Sustainability",
+        "Technology", "Style & Design", "Research + Data", "Awards Programs", "Advertising",
+        "Archive", "Read More", "View All", "Subscribe", "Contact Us", "About Us",
+    }
+    items = []
+    seen = set()
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(" ", strip=True)
+        href = a.get("href", "")
+        if not title or title in skip_titles or len(title) < 8:
+            continue
+        if "/main/" not in href and not href.startswith("/main/"):
+            continue
+        link = urljoin(url, href)
+        if link in seen:
+            continue
+
+        container = a.find_parent(["li", "article", "section", "div"]) or a.parent
+        text = container.get_text(" ", strip=True) if container else title
+        date_match = date_re.search(text)
+        published = date_match.group(0) if date_match else ""
+
+        summary = text.replace(title, "", 1).strip()
+        if published:
+            summary = summary.replace(published, "", 1).strip()
+        summary = re.sub(r"\s+", " ", summary)
+        summary = summary.replace("Read More", "").strip(" -|")
+
+        items.append({
+            "title": title,
+            "link": link,
+            "published": published,
+            "summary": summary[:220],
+            "source": "Floor Covering Weekly",
+        })
+        seen.add(link)
+        if len(items) >= limit:
+            break
+
+    return items or [{"title": "표시할 FCW 기사를 찾지 못했습니다.", "link": url, "published": "", "summary": "", "source": "FCW"}]
 
 
 def _get_client(api_key):

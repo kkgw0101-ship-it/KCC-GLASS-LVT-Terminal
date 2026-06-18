@@ -6,3 +6,4 @@ feedparser
 anthropic
 python-dotenv
 reportlab
+beautifulsoup4

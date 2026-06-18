@@ -426,6 +426,7 @@ df_fedfunds = get_fred('FEDFUNDS',     '기준금리')
 df_newsales = get_fred('HSN1F',        '신규주택판매')
 df_wti      = get_fred('DCOILWTICO',    'WTI')
 df_brent    = get_fred('DCOILBRENTEU',  'Brent')
+df_fx       = get_fred('DEXKOUS',       'USD/KRW')
 usd_krw     = get_exchange_rate()
 init_session_state(usd_krw)
 
@@ -435,11 +436,13 @@ v_cpi      = latest(df_cpi,      'CPI')
 v_fedfunds = latest(df_fedfunds, '기준금리')
 v_wti      = latest(df_wti,      'WTI')
 v_brent    = latest(df_brent,    'Brent')
+v_fx_hist  = latest(df_fx,       'USD/KRW')
 d_housing  = delta_pct(df_housing,  '주택착공')
 d_mortgage = delta_pct(df_mortgage, '모기지금리')
 d_cpi      = delta_pct(df_cpi,      'CPI')
 d_wti      = delta_pct(df_wti,      'WTI')
 d_brent    = delta_pct(df_brent,    'Brent')
+d_fx       = delta_pct(df_fx,       'USD/KRW', periods=20)
 
 def chart_layout(fig, height=240):
     fig.update_layout(
@@ -541,6 +544,7 @@ if menu == "📊 Overview":
             ("30Y 모기지", df_mortgage, "모기지금리", "%"),
             ("CPI", df_cpi, "CPI", ""),
             ("기준금리", df_fedfunds, "기준금리", "%"),
+            ("USD/KRW", df_fx, "USD/KRW", "원"),
             ("WTI", df_wti, "WTI", "$"),
             ("Brent", df_brent, "Brent", "$"),
         ]
@@ -600,6 +604,46 @@ if menu == "📊 Overview":
             st.markdown('<div class="placeholder"><span style="font-size:26px">📋</span><span>버튼을 눌러 브리핑 생성</span></div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">USD/KRW Exchange Rate Trend</span><span class="p-m">FRED DEXKOUS · Real-time marker</span></div><div class="p-body">', unsafe_allow_html=True)
+    fx_period = st.radio(
+        "USD/KRW 기간",
+        ["1년", "3년", "5년"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="overview_fx_period",
+    )
+    fx_days = {"1년": 365, "3년": 365 * 3, "5년": 365 * 5}[fx_period]
+    dffx = df_fx[df_fx["USD/KRW"] > 0].copy()
+    dffx = dffx[dffx["date"] >= (pd.Timestamp.now() - pd.Timedelta(days=fx_days))]
+    if len(dffx):
+        fig_fx = go.Figure()
+        fig_fx.add_trace(go.Scatter(
+            x=dffx["date"], y=dffx["USD/KRW"], name="USD/KRW",
+            line=dict(color=GOLD, width=2.5),
+            fill="tozeroy",
+            fillcolor="rgba(232,179,57,0.08)",
+            hovertemplate="%{x|%Y-%m-%d}<br>USD/KRW: %{y:,.1f}<extra></extra>",
+        ))
+        fig_fx.add_hline(
+            y=usd_krw, line_width=1, line_dash="dot", line_color=T["accent"],
+            annotation_text=f"Live {usd_krw:,.0f}", annotation_position="top right",
+        )
+        _fymin, _fymax = dffx["USD/KRW"].min(), dffx["USD/KRW"].max()
+        _fypad = (_fymax - _fymin) * 0.18 if _fymax > _fymin else 50
+        chart_layout(fig_fx, 230)
+        fig_fx.update_layout(
+            yaxis=dict(range=[_fymin - _fypad, _fymax + _fypad], gridcolor=T['chart_grid']),
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig_fx, use_container_width=True, config={"displayModeBar": False})
+        st.markdown(
+            f'<div style="color:{T["text3"]};font-size:11px;margin-top:-4px">FRED 일별 환율 흐름에 현재 실시간 환율 {usd_krw:,.0f}원을 점선으로 표시합니다.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">💱</span><span>환율 시계열을 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     v_newsales = latest(df_newsales, "신규주택판매")
     market_summary = build_market_summary(
         v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
@@ -611,7 +655,7 @@ if menu == "📊 Overview":
         ["30Y Mortgage", f"{v_mortgage:.2f}%", f"{d_mortgage:+.2f}%p"],
         ["CPI Index", f"{v_cpi:.1f}", f"{d_cpi:+.1f}%"],
         ["Fed Funds", f"{v_fedfunds:.2f}%", "정책금리"],
-        ["USD/KRW", f"{usd_krw:,.0f}", "실시간 환율"],
+        ["USD/KRW", f"{usd_krw:,.0f}", f"20거래일 {d_fx:+.1f}%"],
         ["WTI", f"${v_wti:.1f}", f"{d_wti:+.1f}%"],
     ]
 

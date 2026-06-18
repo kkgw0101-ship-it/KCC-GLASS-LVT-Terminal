@@ -222,6 +222,42 @@ def delta_pct(df, col, periods=1):
         return 0
     return (s.iloc[-1] - s.iloc[-1-periods]) / s.iloc[-1-periods] * 100
 
+def asof_value(df, col, target_date):
+    sub = df[(df["date"] <= target_date) & (df[col].notna()) & (df[col] > 0)]
+    if len(sub) == 0:
+        return None, None
+    row = sub.iloc[-1]
+    return row[col], row["date"]
+
+def pct_change(current, previous):
+    if previous in (None, 0) or current is None:
+        return None
+    return (current - previous) / previous * 100
+
+def fmt_change(value):
+    if value is None:
+        return '<span class="fl">N/A</span>'
+    cls = "up" if value > 0 else "dn" if value < 0 else "fl"
+    sign = "+" if value > 0 else ""
+    return f'<span class="{cls}">{sign}{value:.1f}%</span>'
+
+def build_market_compare_rows(rows):
+    html_rows = ""
+    for r in rows:
+        html_rows += (
+            "<tr>"
+            f"<td>{r['label']}</td>"
+            f"<td>{r['unit']}</td>"
+            f"<td>{r['date']}</td>"
+            f"<td>{r['current']}</td>"
+            f"<td>{r['prev_month']}</td>"
+            f"<td>{r['mom']}</td>"
+            f"<td>{r['prev_year']}</td>"
+            f"<td>{r['yoy']}</td>"
+            "</tr>"
+        )
+    return html_rows
+
 def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
                          v_fedfunds, usd_krw, v_wti, d_wti):
     demand = (
@@ -725,6 +761,60 @@ elif menu == "🛢 원자재":
     chart_layout(fig, 340)
     fig.update_layout(hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    def raw_compare_row(label, df, col, unit, decimals=1, current_override=None):
+        clean = df[(df[col].notna()) & (df[col] > 0)].copy()
+        if len(clean) == 0:
+            return {
+                "label": label, "unit": unit, "date": "N/A", "current": "N/A",
+                "prev_month": "N/A", "mom": fmt_change(None),
+                "prev_year": "N/A", "yoy": fmt_change(None),
+            }
+        last = clean.iloc[-1]
+        current = current_override if current_override is not None else last[col]
+        base_date = pd.Timestamp(last["date"])
+        pm, _ = asof_value(clean, col, base_date - pd.DateOffset(months=1))
+        py, _ = asof_value(clean, col, base_date - pd.DateOffset(years=1))
+        if unit == "$/bbl":
+            value_fmt = lambda v: "N/A" if v is None else f"${v:,.{decimals}f}"
+        elif unit == "KRW/USD":
+            value_fmt = lambda v: "N/A" if v is None else f"{v:,.0f}"
+        else:
+            value_fmt = lambda v: "N/A" if v is None else f"{v:,.{decimals}f}"
+        return {
+            "label": label,
+            "unit": unit,
+            "date": base_date.strftime("%Y-%m-%d"),
+            "current": value_fmt(current),
+            "prev_month": value_fmt(pm),
+            "mom": fmt_change(pct_change(current, pm)),
+            "prev_year": value_fmt(py),
+            "yoy": fmt_change(pct_change(current, py)),
+        }
+
+    raw_rows = [
+        raw_compare_row("WTI 원유", df_wti, "WTI", "$/bbl", 1),
+        raw_compare_row("Brent 원유", df_brent, "Brent", "$/bbl", 1),
+        raw_compare_row("USD/KRW", df_fx, "USD/KRW", "KRW/USD", 0, current_override=usd_krw),
+    ]
+    raw_table = build_market_compare_rows(raw_rows)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">원자재 핵심 지표 비교표</span><span class="p-m">Current vs 1M / 1Y</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+              <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+            </tr>
+          </thead>
+          <tbody>{raw_table}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("전월/전년 값은 해당 기준일 이전의 가장 가까운 발표값 기준입니다. USD/KRW 현재값은 실시간 환율, 비교값은 FRED 일별 고시 흐름 기준입니다.")
     st.markdown('</div></div>', unsafe_allow_html=True)
 # ════════════════════════════════════════════════════════════
 elif menu == "🚢 Freight":

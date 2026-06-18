@@ -167,6 +167,11 @@ st.markdown(f"""
 .sim-sub {{ font-size:11px; color:{T['text3']}; margin-top:4px; }}
 .placeholder {{ background:{T['panel2']}; border:1px dashed {T['border']}; border-radius:8px;
   display:flex; flex-direction:column; align-items:center; justify-content:center; height:240px; color:{T['text3']}; font-size:13px; gap:8px; }}
+.summary-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }}
+.summary-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:12px 14px; min-height:96px; }}
+.summary-k {{ color:{T['text3']}; font-size:10px; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; margin-bottom:7px; }}
+.summary-v {{ color:{T['text']}; font-size:13px; line-height:1.55; }}
+.report-note {{ color:{T['text2']}; font-size:12px; line-height:1.6; margin-bottom:12px; }}
 
 /* 입력 위젯 */
 [data-testid="stNumberInput"] label, [data-testid="stTextInput"] label {{ color:{T['text2']} !important; font-size:11px !important; font-weight:600; }}
@@ -215,6 +220,135 @@ def delta_pct(df, col, periods=1):
     if len(s) < periods + 1:
         return 0
     return (s.iloc[-1] - s.iloc[-1-periods]) / s.iloc[-1-periods] * 100
+
+def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
+                         v_fedfunds, usd_krw, v_wti, d_wti):
+    demand = (
+        "주택착공이 전월 대비 개선되어 바닥재 수요 환경은 우호적으로 해석됩니다."
+        if d_housing > 0 else
+        "주택착공이 전월 대비 둔화되어 단기 수요 회복 속도는 보수적으로 볼 필요가 있습니다."
+    )
+    rate = (
+        "모기지 금리 상승은 주택 거래와 리모델링 심리에 부담으로 작용할 수 있습니다."
+        if d_mortgage > 0 else
+        "모기지 금리 하락은 주택 수요와 리모델링 심리에 완화 요인으로 작용할 수 있습니다."
+    )
+    cost = (
+        "유가 상승은 PVC, 운임, 에너지성 비용에 부담 요인으로 연결될 수 있습니다."
+        if d_wti > 0 else
+        "유가 안정은 원재료와 물류비 부담 완화에 긍정적입니다."
+    )
+    fx = (
+        "USD/KRW가 높은 구간에 있어 원화 기준 매출에는 우호적이나, 달러화 비용과 견적 민감도 점검이 필요합니다."
+        if usd_krw >= 1400 else
+        "USD/KRW가 상대적으로 안정적이어서 환율 민감도는 관리 가능한 구간으로 보입니다."
+    )
+    headline = (
+        f"현재 미국 주택 지표는 {v_housing:,.0f}K, 30년 모기지 금리는 {v_mortgage:.2f}%입니다. "
+        f"CPI {v_cpi:.1f}, 기준금리 {v_fedfunds:.2f}%, USD/KRW {usd_krw:,.0f}원 기준으로 가격과 수요를 함께 점검해야 합니다."
+    )
+    actions = [
+        "주요 거래선 견적은 환율과 운임 변동을 반영해 유효기간을 짧게 관리",
+        "미국 주택 지표 둔화 시 프로모션 대상 지역과 제품 믹스 재점검",
+        "유가와 운임 상승 구간에서는 선적 일정과 재고 회전율을 우선 확인",
+    ]
+    return {
+        "headline": headline,
+        "demand": demand,
+        "rate": rate,
+        "cost": cost,
+        "fx": fx,
+        "actions": actions,
+    }
+
+def create_pdf_report(metrics, summary, ai_briefing=""):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    buffer = BytesIO()
+    pdfmetrics.registerFont(UnicodeCIDFont("HYGothic-Medium"))
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=14*mm, leftMargin=14*mm,
+        topMargin=13*mm, bottomMargin=12*mm
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(
+        "KTitle", parent=styles["Title"], fontName="HYGothic-Medium",
+        fontSize=17, leading=22, textColor=colors.HexColor("#0E2372"),
+        spaceAfter=5
+    )
+    sub = ParagraphStyle(
+        "KSub", parent=styles["Normal"], fontName="HYGothic-Medium",
+        fontSize=8.5, leading=12, textColor=colors.HexColor("#5A6677"),
+        spaceAfter=8
+    )
+    head = ParagraphStyle(
+        "KHead", parent=styles["Heading2"], fontName="HYGothic-Medium",
+        fontSize=11, leading=14, textColor=colors.HexColor("#0F1722"),
+        spaceBefore=5, spaceAfter=5
+    )
+    body = ParagraphStyle(
+        "KBody", parent=styles["BodyText"], fontName="HYGothic-Medium",
+        fontSize=9.2, leading=13.5, textColor=colors.HexColor("#202A38")
+    )
+    small = ParagraphStyle(
+        "KSmall", parent=body, fontSize=8.3, leading=12,
+        textColor=colors.HexColor("#3E4A5A")
+    )
+
+    story = [
+        Paragraph("KCC Glass LVT Market Brief", title),
+        Paragraph(f"Executive one-page report | {datetime.now().strftime('%Y-%m-%d %H:%M')} 기준", sub),
+        Paragraph("1. 핵심 요약", head),
+        Paragraph(summary["headline"], body),
+        Spacer(1, 5),
+    ]
+
+    table_data = [["지표", "현재값", "변화/비고"]]
+    for row in metrics:
+        table_data.append(row)
+    table = Table(table_data, colWidths=[42*mm, 42*mm, 85*mm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "HYGothic-Medium"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0E2372")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 8.5),
+        ("FONTSIZE", (0, 1), (-1, -1), 8.2),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D9E0EA")),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F7F9FC")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([Paragraph("2. 주요 지표", head), table, Spacer(1, 6)])
+
+    story.extend([
+        Paragraph("3. 시장 해석", head),
+        Paragraph(f"- 수요: {summary['demand']}", small),
+        Paragraph(f"- 금리: {summary['rate']}", small),
+        Paragraph(f"- 비용: {summary['cost']}", small),
+        Paragraph(f"- 환율: {summary['fx']}", small),
+        Spacer(1, 5),
+        Paragraph("4. 영업 액션 포인트", head),
+    ])
+    for action in summary["actions"]:
+        story.append(Paragraph(f"- {action}", small))
+
+    if ai_briefing:
+        clean_brief = str(ai_briefing).replace("\n", "<br/>")
+        story.extend([Spacer(1, 5), Paragraph("5. AI 브리핑 메모", head), Paragraph(clean_brief[:900], small)])
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
 
 def calc_landing_cost(invoice, reciprocal_on, reciprocal_rate,
                       mpf_on, mpf_rate, hmf_rate, base_duty_rate,
@@ -457,10 +591,53 @@ if menu == "📊 Overview":
                     "USD/KRW": f"{usd_krw:,.0f}원",
                 }
                 b = llm.generate_market_briefing(anthropic_key, ind)
+                st.session_state.market_briefing = b
                 st.markdown(f'<div class="ai">{b}</div>', unsafe_allow_html=True)
+        elif st.session_state.get("market_briefing"):
+            st.markdown(f'<div class="ai">{st.session_state.market_briefing}</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="placeholder"><span style="font-size:26px">📋</span><span>버튼을 눌러 브리핑 생성</span></div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
+
+    v_newsales = latest(df_newsales, "신규주택판매")
+    market_summary = build_market_summary(
+        v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
+        v_fedfunds, usd_krw, v_wti, d_wti
+    )
+    report_metrics = [
+        ["Housing Starts", f"{v_housing:,.0f}K", f"{d_housing:+.1f}% MoM"],
+        ["New Home Sales", f"{v_newsales:,.0f}K", "월간 발표"],
+        ["30Y Mortgage", f"{v_mortgage:.2f}%", f"{d_mortgage:+.2f}%p"],
+        ["CPI Index", f"{v_cpi:.1f}", f"{d_cpi:+.1f}%"],
+        ["Fed Funds", f"{v_fedfunds:.2f}%", "정책금리"],
+        ["USD/KRW", f"{usd_krw:,.0f}", "실시간 환율"],
+        ["WTI", f"${v_wti:.1f}", f"{d_wti:+.1f}%"],
+    ]
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Executive Snapshot</span><span class="p-m">Auto summary</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-k">Demand</div><div class="summary-v">{market_summary["demand"]}</div></div>
+      <div class="summary-card"><div class="summary-k">Rate</div><div class="summary-v">{market_summary["rate"]}</div></div>
+      <div class="summary-card"><div class="summary-k">Cost / FX</div><div class="summary-v">{market_summary["cost"]}<br>{market_summary["fx"]}</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    r1, r2 = st.columns([2, 1], gap="medium")
+    with r1:
+        action_rows = "".join([f"<tr><td>{i}</td><td>{a}</td></tr>" for i, a in enumerate(market_summary["actions"], 1)])
+        st.markdown(f'<table class="dt"><thead><tr><th>No.</th><th>상부 보고용 액션 포인트</th></tr></thead><tbody>{action_rows}</tbody></table>', unsafe_allow_html=True)
+    with r2:
+        st.markdown('<div class="report-note">현재 Overview 지표와 요약을 1페이지 보고서 양식으로 저장합니다. AI 브리핑을 먼저 생성하면 PDF 하단에 함께 반영됩니다.</div>', unsafe_allow_html=True)
+        pdf_buffer = create_pdf_report(report_metrics, market_summary, st.session_state.get("market_briefing", ""))
+        st.download_button(
+            "📄 1페이지 PDF 보고서 다운로드",
+            data=pdf_buffer,
+            file_name=f"kcc_lvt_market_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # 💰 수익성 시뮬레이터

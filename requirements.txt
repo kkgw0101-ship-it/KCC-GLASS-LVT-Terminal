@@ -5,3 +5,4 @@ plotly
 feedparser
 anthropic
 python-dotenv
+reportlab

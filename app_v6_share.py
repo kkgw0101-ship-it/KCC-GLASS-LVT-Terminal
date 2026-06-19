@@ -186,6 +186,20 @@ st.markdown(f"""
 .fcw-card.featured .fcw-title {{ font-size:22px; line-height:1.25; }}
 .fcw-summary {{ color:{T['text2']}; font-size:13px; line-height:1.62; }}
 .fcw-read {{ margin-top:auto; color:{T['accent']}; font-size:12px; font-weight:800; text-decoration:none; }}
+.freight-stack {{ display:flex; flex-direction:column; gap:12px; }}
+.freight-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; display:grid; grid-template-columns:118px 1fr; min-height:128px; transition:transform .15s ease, border-color .15s ease; }}
+.freight-card:hover {{ transform:translateY(-2px); border-color:{T['accent']}; }}
+.freight-card.featured {{ grid-template-columns:1fr; min-height:230px; }}
+.freight-visual {{ background:linear-gradient(135deg,#0E2372 0%,#1E3A8A 48%,#E8B339 100%); display:flex; flex-direction:column; justify-content:space-between; padding:12px; color:#fff; }}
+.freight-card.featured .freight-visual {{ min-height:118px; }}
+.freight-badge {{ font-size:10px; font-weight:900; letter-spacing:1px; color:rgba(255,255,255,.82); }}
+.freight-mark {{ font-size:24px; font-weight:900; line-height:1; }}
+.freight-body {{ padding:13px 14px; display:flex; flex-direction:column; gap:7px; }}
+.freight-meta {{ color:{T['text3']}; font-size:10px; font-family:'SF Mono','Consolas',monospace; line-height:1.4; }}
+.freight-title {{ color:{T['text']}; font-size:15px; line-height:1.35; font-weight:800; text-decoration:none; }}
+.freight-card.featured .freight-title {{ font-size:19px; }}
+.freight-title:hover {{ color:{T['accent']}; }}
+.freight-read {{ margin-top:auto; color:{T['accent']}; font-size:12px; font-weight:800; text-decoration:none; }}
 
 /* 시뮬레이터 결과 카드 */
 .sim-result {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:16px; text-align:center; }}
@@ -1671,14 +1685,31 @@ elif menu == "🚢 Freight":
 
     cN, cA = st.columns([1, 1], gap="medium")
     with cN:
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">📰 물류·운임 뉴스</span><span class="p-m">Google News RSS</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">물류·운임 뉴스</span><span class="p-m">Google News RSS</span></div><div class="p-body">', unsafe_allow_html=True)
         news = llm.fetch_news("freight", limit=8)
+        def freight_news_card(item, idx=0):
+            title = html.escape(item.get("title", ""))
+            link = html.escape(item.get("link", ""))
+            published = html.escape((item.get("published", "") or "Latest")[:22])
+            source = html.escape(item.get("source", "") or "Market News")
+            marks = ["SCFI", "PORT", "RATE", "OCEAN", "CAPA", "RISK"]
+            mark = marks[idx % len(marks)]
+            klass = "freight-card featured" if idx == 0 else "freight-card"
+            return (
+                f'<div class="{klass}">'
+                f'<div class="freight-visual"><div class="freight-badge">FREIGHT WATCH</div><div class="freight-mark">{mark}</div></div>'
+                f'<div class="freight-body">'
+                f'<div class="freight-meta">{published} · {source}</div>'
+                f'<a class="freight-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                f'<a class="freight-read" href="{link}" target="_blank" rel="noopener noreferrer">Read More &rarr;</a>'
+                f'</div>'
+                f'</div>'
+            )
         if news:
-            for n in news:
-                pub = n['published'][:16] if n['published'] else ""
-                st.markdown(f'<div class="news"><a href="{n["link"]}" target="_blank">{n["title"]}</a><div class="news-t">{pub}</div></div>', unsafe_allow_html=True)
+            news_cards = "".join(freight_news_card(n, i) for i, n in enumerate(news[:6]))
+            st.markdown(f'<div class="freight-stack">{news_cards}</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="placeholder"><span style="font-size:26px">📡</span><span>뉴스를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+            st.markdown('<div class="placeholder"><span style="font-size:26px">NEWS</span><span>뉴스를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
     with cA:
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">🤖 AI 운임 분석</span><span class="p-m">Claude · LVT 수출 관점</span></div><div class="p-body">', unsafe_allow_html=True)

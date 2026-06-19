@@ -184,6 +184,18 @@ st.markdown(f"""
 .summary-k {{ color:{T['text3']}; font-size:10px; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; margin-bottom:7px; }}
 .summary-v {{ color:{T['text']}; font-size:13px; line-height:1.55; }}
 .report-note {{ color:{T['text2']}; font-size:12px; line-height:1.6; margin-bottom:12px; }}
+.alert-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }}
+.alert-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-left:4px solid {T['text3']}; border-radius:8px; padding:12px 14px; min-height:92px; }}
+.alert-critical {{ border-left-color:{T['down']}; }}
+.alert-warn {{ border-left-color:{GOLD}; }}
+.alert-watch {{ border-left-color:{T['accent']}; }}
+.alert-level {{ font-size:10px; font-weight:800; letter-spacing:0.7px; text-transform:uppercase; margin-bottom:6px; color:{T['text3']}; }}
+.alert-title {{ font-size:13px; font-weight:800; color:{T['text']}; margin-bottom:5px; }}
+.alert-msg {{ font-size:12px; color:{T['text2']}; line-height:1.55; }}
+.score-pill {{ display:inline-block; min-width:34px; text-align:center; padding:2px 8px; border-radius:999px; font-weight:800; font-size:11px; color:#fff; }}
+.score-a {{ background:{T['up']}; }}
+.score-b {{ background:{GOLD}; color:#111; }}
+.score-c {{ background:{T['text3']}; }}
 
 /* 입력 위젯 */
 [data-testid="stNumberInput"] label, [data-testid="stTextInput"] label {{ color:{T['text2']} !important; font-size:11px !important; font-weight:600; }}
@@ -307,6 +319,11 @@ def format_table_value(v):
         return f"{v:,.2f}"
     return html.escape(str(v))
 
+def table_cell(v, col=None):
+    if isinstance(v, str) and ("<span" in v or "<br" in v):
+        return v
+    return format_table_value(v)
+
 def dataframe_to_dark_table(df, columns=None, max_rows=None):
     view = df.copy()
     if columns:
@@ -316,7 +333,7 @@ def dataframe_to_dark_table(df, columns=None, max_rows=None):
     header = "".join(f"<th>{html.escape(str(c))}</th>" for c in view.columns)
     body = ""
     for _, row in view.iterrows():
-        body += "<tr>" + "".join(f"<td>{format_table_value(row[c])}</td>" for c in view.columns) + "</tr>"
+        body += "<tr>" + "".join(f"<td>{table_cell(row[c], c)}</td>" for c in view.columns) + "</tr>"
     return f'<div class="table-scroll"><table class="dt"><thead><tr>{header}</tr></thead><tbody>{body}</tbody></table></div>'
 
 def indicator_compare_row(label, df, col, unit="", decimals=1, current_override=None):
@@ -428,6 +445,15 @@ def purchase_compare_row(label, df, col):
     }
 
 def get_freight_index_df():
+    if "freight_index_rows" in st.session_state:
+        df = pd.DataFrame(st.session_state.freight_index_rows)
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            for col in ["SCFI", "CCFI"]:
+                if col not in df.columns:
+                    df[col] = None
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            return df.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
     path = os.path.join(os.path.dirname(__file__), "freight_index_records.json")
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -541,6 +567,157 @@ def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_
         "fx": fx,
         "actions": actions,
     }
+
+def build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp):
+    rules = [
+        ("critical" if usd_krw >= 1600 else "warn" if usd_krw >= 1550 else "watch" if usd_krw >= 1500 else None,
+         "USD/KRW", f"{usd_krw:,.0f}원", "환율 고점 구간입니다. 견적 유효기간과 원화 환산 마진을 같이 점검하세요."),
+        ("critical" if v_wti >= 90 else "warn" if v_wti >= 85 else "watch" if d_wti >= 5 else None,
+         "WTI", f"${v_wti:,.1f}", "유가 상승은 PVC, 운임, 에너지성 비용으로 전이될 수 있습니다."),
+        ("critical" if v_mortgage >= 7.0 else "warn" if v_mortgage >= 6.5 else None,
+         "30Y Mortgage", f"{v_mortgage:.2f}%", "모기지 금리 부담이 주택 거래와 리모델링 심리에 영향을 줄 수 있습니다."),
+        ("critical" if v_scfi >= 3200 else "warn" if v_scfi >= 3000 else "watch" if d_scfi >= 10 else None,
+         "SCFI", f"{v_scfi:,.0f}", "운임 지수가 높은 구간입니다. 선적 일정과 견적 운임 가정을 재확인하세요."),
+        ("warn" if d_pvc >= 10 else "watch" if d_pvc >= 5 else None,
+         "PVC", f"{d_pvc:+.1f}% MoM", "PVC 구매 지수 상승폭이 커지고 있습니다. 원가 반영 타이밍을 확인하세요."),
+        ("warn" if d_dotp >= 10 else "watch" if d_dotp >= 5 else None,
+         "DOTP", f"{d_dotp:+.1f}% MoM", "DOTP 구매 지수 상승폭이 커지고 있습니다. 단가 민감도를 점검하세요."),
+    ]
+    alerts = []
+    for level, title, value, message in rules:
+        if level:
+            alerts.append({"level": level, "title": title, "value": value, "message": message})
+    return alerts
+
+def render_alert_cards(alerts):
+    if not alerts:
+        return (
+            '<div class="alert-grid">'
+            '<div class="alert-card alert-watch"><div class="alert-level">NORMAL</div>'
+            '<div class="alert-title">주의 임계값 초과 없음</div>'
+            '<div class="alert-msg">현재 설정된 환율, 유가, 운임, 주택금리, 원재료 기준에서 즉시 경고 항목은 없습니다.</div></div>'
+            '</div>'
+        )
+    label = {"critical": "CRITICAL", "warn": "WARNING", "watch": "WATCH"}
+    cards = ""
+    for a in alerts[:6]:
+        cards += (
+            f'<div class="alert-card alert-{a["level"]}">'
+            f'<div class="alert-level">{label.get(a["level"], "WATCH")}</div>'
+            f'<div class="alert-title">{html.escape(a["title"])} · {html.escape(a["value"])}</div>'
+            f'<div class="alert-msg">{html.escape(a["message"])}</div>'
+            '</div>'
+        )
+    return f'<div class="alert-grid">{cards}</div>'
+
+def build_weekly_brief(summary, alerts, d_fx, d_scfi, d_pvc, d_dotp):
+    top_alert = alerts[0]["title"] if alerts else "주요 임계값 초과 없음"
+    return [
+        f"이번 주 우선 체크 항목은 {top_alert}입니다.",
+        summary["demand"],
+        summary["rate"],
+        f"환율은 20거래일 기준 {d_fx:+.1f}% 흐름이며, 운임은 4주 기준 SCFI {d_scfi:+.1f}%입니다.",
+        f"구매팀 지수는 PVC {d_pvc:+.1f}% MoM, DOTP {d_dotp:+.1f}% MoM으로 원가 반영 여부를 확인해야 합니다.",
+    ]
+
+def last_valid_date(df, col=None, fmt="%Y-%m-%d"):
+    if df is None or df.empty or "date" not in df.columns:
+        return "N/A"
+    clean = df.copy()
+    if col and col in clean.columns:
+        clean = clean[clean[col].notna()]
+    clean = clean.dropna(subset=["date"])
+    if clean.empty:
+        return "N/A"
+    return pd.Timestamp(clean["date"].max()).strftime(fmt)
+
+def build_update_rows():
+    return pd.DataFrame([
+        {"데이터": "FRED Housing / Macro", "출처": "FRED API", "최근 기준": max(last_valid_date(df_housing, "주택착공"), last_valid_date(df_cpi, "CPI")), "업데이트": "자동"},
+        {"데이터": "USD/KRW", "출처": "Exchange API + FRED", "최근 기준": datetime.now().strftime("%Y-%m-%d %H:%M"), "업데이트": "자동"},
+        {"데이터": "PVC / DOTP", "출처": "구매팀 수기 지수", "최근 기준": last_valid_date(df_purchase, fmt="%Y-%m"), "업데이트": "수기/엑셀"},
+        {"데이터": "SCFI / CCFI", "출처": "국가물류통합정보센터", "최근 기준": last_valid_date(df_freight, "SCFI"), "업데이트": "엑셀 반영"},
+        {"데이터": "Market Insight", "출처": "내부 조사 자료", "최근 기준": "2026-06-19", "업데이트": "수기"},
+        {"데이터": "Tariff Brief", "출처": "내부 보고 자료", "최근 기준": "2026-06-19", "업데이트": "수기"},
+    ])
+
+def normalize_purchase_upload(uploaded):
+    df = pd.read_excel(uploaded)
+    df.columns = [str(c).strip() for c in df.columns]
+    month_col = "월" if "월" in df.columns else "Month" if "Month" in df.columns else df.columns[0]
+    rename = {month_col: "월"}
+    for c in df.columns:
+        up = str(c).upper()
+        if up == "PVC":
+            rename[c] = "PVC"
+        elif up == "DOTP":
+            rename[c] = "DOTP"
+    out = df.rename(columns=rename)
+    needed = ["월", "PVC", "DOTP"]
+    if not all(c in out.columns for c in needed):
+        raise ValueError("월, PVC, DOTP 컬럼이 필요합니다.")
+    return out[needed]
+
+def set_freight_index_df(df):
+    clean = df.copy()
+    clean.columns = [str(c).strip() for c in clean.columns]
+    first_col = clean.columns[0] if len(clean.columns) else None
+    if first_col is not None:
+        first_values = clean[first_col].astype(str).str.upper()
+        if first_values.str.contains("SCFI|CCFI", regex=True).any():
+            records = []
+            for _, row in clean.iterrows():
+                label = str(row[first_col]).upper()
+                if "SCFI" not in label and "CCFI" not in label:
+                    continue
+                index_name = "SCFI" if "SCFI" in label else "CCFI"
+                for c in clean.columns[1:]:
+                    dt = pd.to_datetime(str(c), errors="coerce")
+                    if pd.isna(dt):
+                        continue
+                    records.append({"date": dt, index_name: row[c]})
+            if records:
+                clean = pd.DataFrame(records).groupby("date", as_index=False).first()
+                clean.columns = [str(c).strip() for c in clean.columns]
+    rename = {}
+    for c in clean.columns:
+        up = str(c).upper()
+        if c in ["기준일", "날짜", "DATE"] or up == "DATE":
+            rename[c] = "date"
+        elif "SCFI" in up:
+            rename[c] = "SCFI"
+        elif "CCFI" in up:
+            rename[c] = "CCFI"
+    clean = clean.rename(columns=rename)
+    if "date" not in clean.columns or not {"SCFI", "CCFI"}.intersection(clean.columns):
+        raise ValueError("date/기준일과 SCFI 또는 CCFI 컬럼이 필요합니다.")
+    for col in ["SCFI", "CCFI"]:
+        if col not in clean.columns:
+            clean[col] = None
+        clean[col] = pd.to_numeric(clean[col], errors="coerce")
+    clean["date"] = pd.to_datetime(clean["date"], errors="coerce")
+    clean = clean.dropna(subset=["date"]).sort_values("date")
+    st.session_state.freight_index_rows = clean[["date", "SCFI", "CCFI"]].assign(
+        date=lambda x: x["date"].dt.strftime("%Y-%m-%d")
+    ).to_dict("records")
+
+def add_opportunity_scores(df):
+    scored = df.copy()
+    sales_col = "sales_2025" if scored["sales_2025"].notna().any() else "sales_2024"
+    scored["sales_base"] = scored[sales_col].fillna(scored["sales_2024"]).fillna(scored["sales_2023"]).fillna(0)
+    max_sales = scored["sales_base"].max() or 1
+    scored["sales_score"] = scored["sales_base"].clip(lower=0) / max_sales * 45
+    rank_base = scored["rank_2025"].fillna(scored["rank_2024"]).fillna(50)
+    scored["rank_score"] = ((55 - rank_base).clip(lower=0, upper=55) / 55) * 25
+    state_counts = scored.groupby("state")["company"].transform("count")
+    max_state = state_counts.max() or 1
+    scored["state_score"] = state_counts / max_state * 15
+    growth = ((scored["sales_2025"] - scored["sales_2024"]) / scored["sales_2024"] * 100).replace([float("inf"), -float("inf")], 0).fillna(0)
+    scored["growth_score"] = growth.clip(lower=0, upper=25) / 25 * 10
+    scored["category_score"] = scored["category"].map({"Rising Stars": 5, "Top Distributors": 4, "Top Retailers": 3}).fillna(2)
+    scored["opportunity_score"] = (scored["sales_score"] + scored["rank_score"] + scored["state_score"] + scored["growth_score"] + scored["category_score"]).clip(upper=100).round(1)
+    scored["grade"] = pd.cut(scored["opportunity_score"], bins=[-1, 54.9, 74.9, 100], labels=["C", "B", "A"]).astype(str)
+    return scored
 
 def create_pdf_report(metrics, summary, ai_briefing=""):
     from io import BytesIO
@@ -878,6 +1055,53 @@ if menu == "📊 Overview":
       <div class="kpi"><div class="kpi-n">New Home Sales</div><div class="kpi-v">{latest(df_newsales,'신규주택판매'):,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div><div class="kpi-c fl">월간</div></div>
     </div>
     """, unsafe_allow_html=True)
+
+    v_newsales = latest(df_newsales, "신규주택판매")
+    market_summary = build_market_summary(
+        v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
+        v_fedfunds, usd_krw, v_wti, d_wti
+    )
+    alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
+    weekly_brief = build_weekly_brief(market_summary, alerts, d_fx, d_scfi, d_pvc, d_dotp)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Alert / Warning Center</span><span class="p-m">Threshold watch</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(render_alert_cards(alerts), unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    b_col, u_col = st.columns([1.2, 1], gap="medium")
+    with b_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Weekly Executive Brief</span><span class="p-m">5-line summary</span></div><div class="p-body">', unsafe_allow_html=True)
+        brief_rows = "".join([f"<tr><td>{i}</td><td>{html.escape(line)}</td></tr>" for i, line in enumerate(weekly_brief, 1)])
+        st.markdown(f'<table class="dt"><thead><tr><th>No.</th><th>이번 주 핵심 변화</th></tr></thead><tbody>{brief_rows}</tbody></table>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+    with u_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Source & Last Updated</span><span class="p-m">Data health</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(dataframe_to_dark_table(build_update_rows()), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with st.expander("Data Update Center — 구매팀/물류팀 엑셀을 임시 반영"):
+        up1, up2 = st.columns(2, gap="medium")
+        with up1:
+            purchase_file = st.file_uploader("PVC/DOTP 월별 지수 업로드", type=["xlsx", "xls"], key="purchase_upload")
+            if purchase_file is not None:
+                try:
+                    uploaded_purchase = normalize_purchase_upload(purchase_file)
+                    set_purchase_price_df(uploaded_purchase)
+                    st.success("PVC/DOTP 지수를 현재 세션에 반영했습니다.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"PVC/DOTP 업로드 형식을 확인해주세요: {e}")
+        with up2:
+            freight_file = st.file_uploader("SCFI/CCFI 운임 지수 업로드", type=["xlsx", "xls"], key="freight_upload")
+            if freight_file is not None:
+                try:
+                    uploaded_freight = pd.read_excel(freight_file)
+                    set_freight_index_df(uploaded_freight)
+                    st.success("SCFI/CCFI 지수를 현재 세션에 반영했습니다.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"운임 지수 업로드 형식을 확인해주세요: {e}")
+        st.caption("업로드 반영은 현재 접속 세션 기준입니다. 팀 전체에 고정 반영하려면 업데이트된 데이터를 코드/JSON에 반영해 GitHub에 다시 올리는 방식이 가장 안정적입니다.")
 
     # ── 특정 날짜 지표 조회 ──
     with st.expander("📅 특정 날짜 지표 조회 — 과거 시점의 모든 지표를 한눈에"):
@@ -1454,18 +1678,21 @@ elif menu == "🎯 Market Insight":
             key="market_categories",
         )
         market_view = df_market[df_market["category"].isin(selected_categories)].copy()
+        market_view = add_opportunity_scores(market_view)
 
         total_companies = len(market_view)
         active_states = market_view["state"].nunique()
         sales_base_col = "sales_2025" if market_view["sales_2025"].notna().any() else "sales_2024"
         total_sales = market_view[sales_base_col].sum(skipna=True)
         avg_sales = market_view[sales_base_col].mean(skipna=True)
+        priority_accounts = int((market_view["grade"] == "A").sum())
         st.markdown(f"""
-        <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi-strip" style="grid-template-columns:repeat(5,1fr);">
           <div class="kpi"><div class="kpi-n">Companies</div><div class="kpi-v">{total_companies:,.0f}</div><div class="kpi-c fl">selected list</div></div>
           <div class="kpi"><div class="kpi-n">States</div><div class="kpi-v">{active_states:,.0f}</div><div class="kpi-c fl">home base coverage</div></div>
           <div class="kpi"><div class="kpi-n">Sales Base</div><div class="kpi-v">{total_sales:,.0f}<span style="font-size:12px;color:{T['text3']}">M</span></div><div class="kpi-c fl">{sales_base_col[-4]}{sales_base_col[-3:]} available</div></div>
           <div class="kpi"><div class="kpi-n">Avg Sales</div><div class="kpi-v">{avg_sales:,.1f}<span style="font-size:12px;color:{T['text3']}">M</span></div><div class="kpi-c fl">available rows</div></div>
+          <div class="kpi"><div class="kpi-n">Priority A</div><div class="kpi-v">{priority_accounts:,.0f}</div><div class="kpi-c fl">opportunity score</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1484,6 +1711,35 @@ elif menu == "🎯 Market Insight":
         state_summary["lat"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[0])
         state_summary["lon"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[1])
         active_state_options = state_summary["state"].dropna().sort_values().tolist()
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Account Opportunity Score</span><span class="p-m">Priority ranking</span></div><div class="p-body">', unsafe_allow_html=True)
+        opp_col, opp_chart_col = st.columns([1.2, 1], gap="medium")
+        top_opps = market_view.sort_values("opportunity_score", ascending=False).head(12).copy()
+        top_opps["Grade"] = top_opps["grade"].map(
+            lambda g: f'<span class="score-pill score-{str(g).lower()}">{g}</span>'
+        )
+        score_table = top_opps[["Grade", "opportunity_score", "category", "company", "state", "sales_base"]].rename(columns={
+            "opportunity_score": "Score",
+            "category": "Category",
+            "company": "Company",
+            "state": "State",
+            "sales_base": "Sales Base",
+        })
+        with opp_col:
+            st.markdown(dataframe_to_dark_table(score_table), unsafe_allow_html=True)
+            st.caption("점수는 매출 규모, 순위, 주별 집중도, 성장률, 카테고리 가중치를 합산한 우선순위 참고값입니다.")
+        with opp_chart_col:
+            fig_opp = go.Figure(go.Bar(
+                x=top_opps.sort_values("opportunity_score")["opportunity_score"],
+                y=top_opps.sort_values("opportunity_score")["company"],
+                orientation="h",
+                marker_color=T["accent"],
+                hovertemplate="%{y}<br>Score: %{x:.1f}<extra></extra>",
+            ))
+            chart_layout(fig_opp, 320)
+            fig_opp.update_layout(xaxis_title="Opportunity Score", yaxis_title=None, showlegend=False)
+            st.plotly_chart(fig_opp, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
         map_col, bar_col = st.columns([2, 1], gap="medium")
         with map_col:
@@ -1573,12 +1829,13 @@ elif menu == "🎯 Market Insight":
                 focused_accounts = market_view[market_view["state"] == selected_state].copy()
                 st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">{selected_state} Accounts</span><span class="p-m">{len(focused_accounts)} companies</span></div><div class="p-body">', unsafe_allow_html=True)
                 if len(focused_accounts):
-                    focused_cols = ["category", "company", "home_base", "sales_2025", "sales_2024"]
+                    focused_cols = ["grade", "opportunity_score", "category", "company", "home_base", "sales_2025", "sales_2024"]
                     focused_table = focused_accounts[focused_cols].sort_values(
-                        ["category", "sales_2025", "sales_2024"],
-                        ascending=[True, False, False],
+                        ["opportunity_score", "category", "sales_2025", "sales_2024"],
+                        ascending=[False, True, False, False],
                         na_position="last",
                     )
+                    focused_table = focused_table.rename(columns={"grade": "Grade", "opportunity_score": "Score"})
                     st.markdown(dataframe_to_dark_table(focused_table), unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="placeholder"><span style="font-size:26px">🎯</span><span>선택한 주의 거래선이 없습니다</span></div>', unsafe_allow_html=True)
@@ -1617,16 +1874,17 @@ elif menu == "🎯 Market Insight":
 
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Target Account Table</span><span class="p-m">Filter-ready list</span></div><div class="p-body">', unsafe_allow_html=True)
         display_cols = [
-            "category", "type", "rank_2025", "rank_2024", "rank_2023", "rank_2022",
+            "grade", "opportunity_score", "category", "type", "rank_2025", "rank_2024", "rank_2023", "rank_2022",
             "company", "home_base", "state", "sales_2025", "sales_2024", "sales_2023", "sales_2022"
         ]
-        account_table = market_view[display_cols].sort_values(["category", "rank_2025", "rank_2024", "company"], na_position="last")
+        account_table = market_view[display_cols].sort_values(["opportunity_score", "category", "rank_2025", "rank_2024", "company"], ascending=[False, True, True, True, True], na_position="last")
         st.markdown(dataframe_to_dark_table(account_table), unsafe_allow_html=True)
         excel_download_button(
             "📊 Market Insight 엑셀 다운로드",
             {
                 "Accounts": market_view[display_cols],
                 "State Summary": state_summary,
+                "Opportunity Top": top_opps[["grade", "opportunity_score", "category", "company", "home_base", "state", "sales_base"]],
             },
             f"kcc_lvt_market_insight_{datetime.now().strftime('%Y%m%d')}.xlsx",
             "market_insight_excel_download",

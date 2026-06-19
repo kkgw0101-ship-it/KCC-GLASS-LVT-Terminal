@@ -8,3 +8,4 @@ python-dotenv
 reportlab
 beautifulsoup4
 openpyxl
+xlrd

@@ -1716,16 +1716,16 @@ elif menu == "🚢 Freight":
         }
         def classify_freight_news(title):
             t = title.lower()
+            if any(k in t for k in ["hormuz", "crisis", "blockade", "red sea", "suez", "panama", "disruption", "war", "weather", "delay", "risk", "tariff"]):
+                return "RISK"
             if any(k in t for k in ["port", "terminal", "congestion", "strike", "longshore", "dockworker", "la/lb", "los angeles", "long beach"]):
                 return "PORT"
-            if any(k in t for k in ["rate", "rates", "scfi", "ccfi", "spot", "index", "contract", "pricing"]):
-                return "RATE"
-            if any(k in t for k in ["capacity", "container", "equipment", "space", "blank sailing", "volume", "demand", "supply"]):
+            if any(k in t for k in ["capacity", "equipment", "space", "blank sailing", "blank sailings", "empty slots", "peak season", "volume", "demand", "supply", "carriers slash"]):
                 return "CAPA"
-            if any(k in t for k in ["risk", "tariff", "red sea", "suez", "panama", "disruption", "weather", "war", "delay"]):
-                return "RISK"
             if any(k in t for k in ["ocean", "carrier", "vessel", "ship", "shipping", "sailing", "transpacific"]):
                 return "OCEAN"
+            if any(k in t for k in ["rate", "rates", "scfi", "ccfi", "spot", "index", "contract", "pricing"]):
+                return "RATE"
             return "OCEAN"
         def freight_news_card(item, idx=0):
             title = html.escape(item.get("title", ""))

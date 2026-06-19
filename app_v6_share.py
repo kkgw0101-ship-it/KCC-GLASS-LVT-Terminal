@@ -409,6 +409,24 @@ def freight_compare_row(label, df, col):
         "yoy": fmt_change(pct_change(current, py)),
     }
 
+def get_market_insight_df():
+    path = os.path.join(os.path.dirname(__file__), "market_insight_records.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            records = json.load(f)
+    except Exception:
+        records = []
+    df = pd.DataFrame(records)
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "category", "type", "rank_2025", "rank_2024", "rank_2023", "rank_2022",
+            "company", "home_base", "state", "sales_2025", "sales_2024", "sales_2023", "sales_2022"
+        ])
+    for col in ["rank_2025", "rank_2024", "rank_2023", "rank_2022", "sales_2025", "sales_2024", "sales_2023", "sales_2022"]:
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    df["state"] = df["state"].astype(str).str.upper()
+    return df
+
 def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
                          v_fedfunds, usd_krw, v_wti, d_wti):
     demand = (
@@ -652,6 +670,7 @@ usd_krw     = get_exchange_rate()
 init_session_state(usd_krw)
 df_purchase = get_purchase_price_df()
 df_freight  = get_freight_index_df()
+df_market   = get_market_insight_df()
 
 v_housing  = latest(df_housing,  '주택착공')
 v_mortgage = latest(df_mortgage, '모기지금리')
@@ -714,7 +733,7 @@ with st.sidebar:
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
     menu = st.radio("", [
         "📊 Overview", "🛢 원자재", "🚢 Freight",
-        "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
+        "🎯 Market Insight", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
     ], label_visibility="collapsed")
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -1295,6 +1314,145 @@ elif menu == "🚢 Freight":
                 st.markdown(f'<div class="ai">{a}</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="placeholder"><span style="font-size:26px">🔍</span><span>버튼을 눌러 분석 시작</span></div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 🎯 MARKET INSIGHT
+# ════════════════════════════════════════════════════════════
+elif menu == "🎯 Market Insight":
+    st.markdown('<div class="sec"><span class="sec-t">Market Insight</span><span class="sec-s">미국 LVT 채널 타깃 · Distributor / Retailer / Rising Star</span></div>', unsafe_allow_html=True)
+
+    if df_market.empty:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">🎯</span><span>Market Insight 데이터를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+    else:
+        categories = ["Top Distributors", "Top Retailers", "Rising Stars"]
+        selected_categories = st.multiselect(
+            "Category",
+            categories,
+            default=categories,
+            label_visibility="collapsed",
+            key="market_categories",
+        )
+        market_view = df_market[df_market["category"].isin(selected_categories)].copy()
+
+        total_companies = len(market_view)
+        active_states = market_view["state"].nunique()
+        sales_base_col = "sales_2025" if market_view["sales_2025"].notna().any() else "sales_2024"
+        total_sales = market_view[sales_base_col].sum(skipna=True)
+        avg_sales = market_view[sales_base_col].mean(skipna=True)
+        st.markdown(f"""
+        <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);">
+          <div class="kpi"><div class="kpi-n">Companies</div><div class="kpi-v">{total_companies:,.0f}</div><div class="kpi-c fl">selected list</div></div>
+          <div class="kpi"><div class="kpi-n">States</div><div class="kpi-v">{active_states:,.0f}</div><div class="kpi-c fl">home base coverage</div></div>
+          <div class="kpi"><div class="kpi-n">Sales Base</div><div class="kpi-v">{total_sales:,.0f}<span style="font-size:12px;color:{T['text3']}">M</span></div><div class="kpi-c fl">{sales_base_col[-4]}{sales_base_col[-3:]} available</div></div>
+          <div class="kpi"><div class="kpi-n">Avg Sales</div><div class="kpi-v">{avg_sales:,.1f}<span style="font-size:12px;color:{T['text3']}">M</span></div><div class="kpi-c fl">available rows</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        state_summary = (
+            market_view.groupby("state", as_index=False)
+            .agg(
+                companies=("company", "count"),
+                sales_2025=("sales_2025", "sum"),
+                sales_2024=("sales_2024", "sum"),
+            )
+            .sort_values(["companies", "sales_2025", "sales_2024"], ascending=False)
+        )
+        state_summary["company_list"] = state_summary["state"].map(
+            market_view.groupby("state")["company"].apply(lambda s: ", ".join(s.head(8))).to_dict()
+        )
+
+        map_col, bar_col = st.columns([2, 1], gap="medium")
+        with map_col:
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US Channel Footprint</span><span class="p-m">Company count by state</span></div><div class="p-body">', unsafe_allow_html=True)
+            fig_map = go.Figure(data=go.Choropleth(
+                locations=state_summary["state"],
+                z=state_summary["companies"],
+                locationmode="USA-states",
+                colorscale=[[0, "#162033"], [0.5, "#2D7FF9"], [1, "#E8B339"]],
+                marker_line_color=T["border"],
+                colorbar=dict(title="Count"),
+                customdata=state_summary[["sales_2025", "sales_2024", "company_list"]],
+                hovertemplate=(
+                    "<b>%{location}</b><br>"
+                    "Companies: %{z}<br>"
+                    "2025 Sales: %{customdata[0]:,.1f}M<br>"
+                    "2024 Sales: %{customdata[1]:,.1f}M<br>"
+                    "%{customdata[2]}<extra></extra>"
+                ),
+            ))
+            fig_map.update_geos(scope="usa", bgcolor="rgba(0,0,0,0)", lakecolor="rgba(0,0,0,0)", landcolor=T["panel2"])
+            chart_layout(fig_map, 390)
+            fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig_map, use_container_width=True, config=CHART_CONFIG)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        with bar_col:
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Top States</span><span class="p-m">Concentration</span></div><div class="p-body">', unsafe_allow_html=True)
+            top_states = state_summary.head(10).sort_values("companies")
+            fig_state = go.Figure(go.Bar(
+                x=top_states["companies"],
+                y=top_states["state"],
+                orientation="h",
+                marker_color=T["accent"],
+                hovertemplate="%{y}<br>Companies: %{x}<extra></extra>",
+            ))
+            chart_layout(fig_state, 390)
+            fig_state.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
+            st.plotly_chart(fig_state, use_container_width=True, config=CHART_CONFIG)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        mix_col, sales_col = st.columns([1, 1], gap="medium")
+        with mix_col:
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Channel Mix</span><span class="p-m">List composition</span></div><div class="p-body">', unsafe_allow_html=True)
+            mix = market_view.groupby("category", as_index=False).agg(companies=("company", "count"))
+            fig_mix = go.Figure(go.Pie(
+                labels=mix["category"],
+                values=mix["companies"],
+                hole=0.55,
+                marker=dict(colors=[T["accent"], GOLD, T["up"]]),
+                hovertemplate="%{label}<br>Companies: %{value}<br>%{percent}<extra></extra>",
+            ))
+            chart_layout(fig_mix, 260)
+            st.plotly_chart(fig_mix, use_container_width=True, config=CHART_CONFIG)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        with sales_col:
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Largest Accounts</span><span class="p-m">Sales base</span></div><div class="p-body">', unsafe_allow_html=True)
+            sales_col_name = "sales_2025" if market_view["sales_2025"].notna().any() else "sales_2024"
+            top_sales = market_view.dropna(subset=[sales_col_name]).nlargest(10, sales_col_name).sort_values(sales_col_name)
+            fig_sales = go.Figure(go.Bar(
+                x=top_sales[sales_col_name],
+                y=top_sales["company"],
+                orientation="h",
+                marker_color=GOLD,
+                hovertemplate="%{y}<br>Sales: %{x:,.1f}M<extra></extra>",
+            ))
+            chart_layout(fig_sales, 260)
+            fig_sales.update_layout(xaxis_title="USD millions", yaxis_title=None, showlegend=False)
+            st.plotly_chart(fig_sales, use_container_width=True, config=CHART_CONFIG)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Target Account Table</span><span class="p-m">Filter-ready list</span></div><div class="p-body">', unsafe_allow_html=True)
+        display_cols = [
+            "category", "type", "rank_2025", "rank_2024", "rank_2023", "rank_2022",
+            "company", "home_base", "state", "sales_2025", "sales_2024", "sales_2023", "sales_2022"
+        ]
+        st.dataframe(
+            market_view[display_cols].sort_values(["category", "rank_2025", "rank_2024", "company"], na_position="last"),
+            use_container_width=True,
+            hide_index=True,
+        )
+        excel_download_button(
+            "📊 Market Insight 엑셀 다운로드",
+            {
+                "Accounts": market_view[display_cols],
+                "State Summary": state_summary,
+            },
+            f"kcc_lvt_market_insight_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            "market_insight_excel_download",
+        )
+        st.caption("현재 데이터는 제공된 캡처에서 확인 가능한 항목 기준입니다. 원본 엑셀을 주면 순위와 매출값을 더 정확하게 정리할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════

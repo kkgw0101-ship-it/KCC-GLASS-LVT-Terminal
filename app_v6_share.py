@@ -221,6 +221,13 @@ st.markdown(f"""
 div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['border']}; }}
 [data-testid="stMetricValue"] {{ font-family:'SF Mono','Consolas',monospace; color:{T['text']}; }}
 [data-testid="stMetricLabel"] {{ color:{T['text2']}; }}
+[data-testid="stRadio"] label p {{ color:{T['text2']} !important; font-weight:700 !important; }}
+[data-testid="stRadio"] label span {{ color:{T['text2']} !important; }}
+[data-testid="stRadio"] label:hover p {{ color:{T['text']} !important; }}
+[data-testid="stRadio"] label:hover span {{ color:{T['text']} !important; }}
+[data-testid="stRadio"] [role="radio"][aria-checked="true"] p {{ color:{T['text']} !important; font-weight:800 !important; }}
+[data-testid="stRadio"] [role="radio"][aria-checked="true"] span {{ color:{T['text']} !important; }}
+[data-testid="stRadio"] [role="radiogroup"] {{ gap:10px; }}
 
 /* 글자 크기 토글 보정 */
 [data-testid="stSidebar"] [role="radiogroup"] label {{ font-size:{fs(13)}px !important; }}
@@ -245,6 +252,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
 .stButton button {{ font-size:{fs(12)}px; }}
 [data-testid="stMetricValue"] {{ font-size:{fs(26)}px !important; }}
 [data-testid="stMetricLabel"] {{ font-size:{fs(13)}px !important; }}
+[data-testid="stRadio"] label p {{ font-size:{fs(13)}px !important; }}
 </style>
 """, unsafe_allow_html=True)
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 KCC Glass — LVT Intelligence Terminal (app_v6)
 Bloomberg-style dashboard + 수익성 시뮬레이터
 - 다크/라이트 토글
@@ -10,6 +10,7 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 from datetime import datetime
+from io import BytesIO
 import os
 import base64
 import html
@@ -537,6 +538,40 @@ def create_pdf_report(metrics, summary, ai_briefing=""):
     buffer.seek(0)
     return buffer
 
+def clean_export_df(df):
+    export = df.copy()
+    for col in export.columns:
+        if pd.api.types.is_datetime64_any_dtype(export[col]):
+            export[col] = export[col].dt.strftime("%Y-%m-%d")
+    return export
+
+def make_excel_file(sheets):
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for sheet_name, df in sheets.items():
+            safe_name = sheet_name[:31]
+            clean_export_df(df).to_excel(writer, sheet_name=safe_name, index=False)
+            ws = writer.sheets[safe_name]
+            ws.freeze_panes = "A2"
+            for column_cells in ws.columns:
+                max_len = 0
+                col_letter = column_cells[0].column_letter
+                for cell in column_cells:
+                    max_len = max(max_len, len(str(cell.value)) if cell.value is not None else 0)
+                ws.column_dimensions[col_letter].width = min(max(max_len + 2, 10), 22)
+    buffer.seek(0)
+    return buffer
+
+def excel_download_button(label, sheets, file_name, key):
+    st.download_button(
+        label,
+        data=make_excel_file(sheets),
+        file_name=file_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key=key,
+    )
+
 def calc_landing_cost(invoice, reciprocal_on, reciprocal_rate,
                       mpf_on, mpf_rate, hmf_rate, base_duty_rate,
                       ocean_freight, busan_local, destination, surcharge,
@@ -649,8 +684,27 @@ def chart_layout(fig, height=240):
                     orientation='h', yanchor='bottom', y=1.0, xanchor='left', x=0),
         xaxis=dict(gridcolor=T['chart_grid'], showgrid=False),
         yaxis=dict(gridcolor=T['chart_grid']),
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor=T['panel2'],
+            bordercolor=T['accent'],
+            font=dict(color=T['text'], size=fs(12)),
+        ),
     )
     return fig
+
+CHART_CONFIG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+    "toImageButtonOptions": {
+        "format": "png",
+        "filename": "kcc_lvt_chart",
+        "height": 720,
+        "width": 1280,
+        "scale": 2,
+    },
+}
 
 # ════════════════════════════════════════════════════════════
 # 사이드바
@@ -771,8 +825,16 @@ if menu == "📊 Overview":
         # 모기지 금리(주간 데이터)를 주택착공과 같은 날짜 범위로 맞춤
         _start = dfh["date"].min()
         dfm = df_mortgage[df_mortgage["date"] >= _start]
-        fig.add_trace(go.Bar(x=dfh["date"], y=dfh["주택착공"], name="Housing Starts (K)", marker_color=T['accent'], opacity=0.7))
-        fig.add_trace(go.Scatter(x=dfm["date"], y=dfm["모기지금리"], name="30Y Rate (%)", yaxis="y2", line=dict(color=T['down'], width=2.5)))
+        fig.add_trace(go.Bar(
+            x=dfh["date"], y=dfh["주택착공"], name="Housing Starts (K)",
+            marker_color=T['accent'], opacity=0.7,
+            hovertemplate="%{x|%Y-%m-%d}<br>Housing Starts: %{y:,.0f}K<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=dfm["date"], y=dfm["모기지금리"], name="30Y Rate (%)", yaxis="y2",
+            line=dict(color=T['down'], width=2.5),
+            hovertemplate="%{x|%Y-%m-%d}<br>30Y Mortgage: %{y:.2f}%<extra></extra>",
+        ))
         _mmin, _mmax = dfm["모기지금리"].min(), dfm["모기지금리"].max()
         _pad = (_mmax - _mmin) * 0.35 if _mmax > _mmin else 1
         # x축 양끝에 여백 추가 (선/막대가 끝에 잘리지 않게)
@@ -784,7 +846,7 @@ if menu == "📊 Overview":
             xaxis=dict(range=[_xmin - _xspan, _xmax + _xspan], gridcolor='rgba(0,0,0,0)', showgrid=False),
         )
         chart_layout(fig, 260)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with c2:
@@ -840,7 +902,7 @@ if menu == "📊 Overview":
             yaxis=dict(range=[_fymin - _fypad, _fymax + _fypad], gridcolor=T['chart_grid']),
             hovermode="x unified",
         )
-        st.plotly_chart(fig_fx, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_fx, use_container_width=True, config=CHART_CONFIG)
         st.markdown(
             f'<div style="color:{T["text3"]};font-size:11px;margin-top:-4px">FRED 일별 환율 흐름에 현재 실시간 환율 {usd_krw:,.0f}원을 점선으로 표시합니다.</div>',
             unsafe_allow_html=True,
@@ -865,7 +927,7 @@ if menu == "📊 Overview":
         ))
         chart_layout(fig_raw_idx, 230)
         fig_raw_idx.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_raw_idx, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_raw_idx, use_container_width=True, config=CHART_CONFIG)
         pvc_row = purchase_compare_row("PVC", df_purchase, "PVC")
         dotp_row = purchase_compare_row("DOTP", df_purchase, "DOTP")
         st.markdown(
@@ -897,7 +959,7 @@ if menu == "📊 Overview":
         ))
         chart_layout(fig_freight_ov, 230)
         fig_freight_ov.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_freight_ov, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_freight_ov, use_container_width=True, config=CHART_CONFIG)
         scfi_row = freight_compare_row("SCFI", df_freight, "SCFI")
         ccfi_row = freight_compare_row("CCFI", df_freight, "CCFI")
         st.markdown(
@@ -955,6 +1017,21 @@ if menu == "📊 Overview":
             file_name=f"kcc_lvt_market_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True,
+        )
+        excel_download_button(
+            "📊 전체 지표 엑셀 다운로드",
+            {
+                "Housing": df_housing,
+                "Mortgage": df_mortgage,
+                "New Home Sales": df_newsales,
+                "Macro": df_cpi.merge(df_fedfunds, on="date", how="outer"),
+                "FX": df_fx,
+                "Oil": df_wti.merge(df_brent, on="date", how="outer"),
+                "PVC_DOTP": df_purchase[["월", "PVC", "DOTP"]],
+                "Freight": df_freight,
+            },
+            f"kcc_lvt_all_indicators_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            "overview_excel_download",
         )
     st.markdown('</div></div>', unsafe_allow_html=True)
 
@@ -1026,7 +1103,7 @@ elif menu == "🛢 원자재":
         ))
         chart_layout(fig_purchase, 290)
         fig_purchase.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_purchase, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_purchase, use_container_width=True, config=CHART_CONFIG)
 
         purchase_rows = [
             purchase_compare_row("PVC", dfp, "PVC"),
@@ -1067,7 +1144,7 @@ elif menu == "🛢 원자재":
                              hovertemplate="%{x|%Y-%m-%d}<br>Brent: $%{y:.2f}<extra></extra>"))
     chart_layout(fig, 340)
     fig.update_layout(hovermode="x unified")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     def raw_compare_row(label, df, col, unit, decimals=1, current_override=None):
@@ -1122,6 +1199,16 @@ elif menu == "🛢 원자재":
         unsafe_allow_html=True,
     )
     st.caption("전월/전년 값은 해당 기준일 이전의 가장 가까운 발표값 기준입니다. USD/KRW 현재값은 실시간 환율, 비교값은 FRED 일별 고시 흐름 기준입니다.")
+    excel_download_button(
+        "📊 원자재 데이터 엑셀 다운로드",
+        {
+            "PVC_DOTP": df_purchase[["월", "PVC", "DOTP"]],
+            "Oil": df_wti.merge(df_brent, on="date", how="outer"),
+            "FX": df_fx,
+        },
+        f"kcc_lvt_raw_materials_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "raw_material_excel_download",
+    )
     st.markdown('</div></div>', unsafe_allow_html=True)
 # ════════════════════════════════════════════════════════════
 elif menu == "🚢 Freight":
@@ -1153,7 +1240,7 @@ elif menu == "🚢 Freight":
         ))
         chart_layout(fig_ship, 360)
         fig_ship.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_ship, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_ship, use_container_width=True, config=CHART_CONFIG)
     else:
         st.markdown('<div class="placeholder"><span style="font-size:26px">🚢</span><span>운임 지수 데이터를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
@@ -1179,6 +1266,12 @@ elif menu == "🚢 Freight":
         unsafe_allow_html=True,
     )
     st.caption("출처: 국가물류통합정보센터 국외해상운임지수 엑셀 자료. 전월/전년 값은 기준일 이전 가장 가까운 발표값 기준입니다.")
+    excel_download_button(
+        "📊 운임 지수 엑셀 다운로드",
+        {"Freight": df_freight},
+        f"kcc_lvt_freight_index_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "freight_excel_download",
+    )
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     cN, cA = st.columns([1, 1], gap="medium")
@@ -1256,6 +1349,14 @@ elif menu == "📰 FCW News":
         )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
+    fcw_export = pd.DataFrame(fcw_items)
+    excel_download_button(
+        "📊 FCW 기사 목록 엑셀 다운로드",
+        {"FCW Articles": fcw_export},
+        f"kcc_lvt_fcw_articles_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "fcw_excel_download",
+    )
+
 # ════════════════════════════════════════════════════════════
 # 🏡 HOUSING
 # ════════════════════════════════════════════════════════════
@@ -1263,10 +1364,28 @@ elif menu == "🏡 Housing":
     st.markdown('<div class="sec"><span class="sec-t">US Housing Market</span><span class="sec-s">주택착공 · 신규주택판매 · 모기지 금리</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Starts & New Home Sales</span><span class="p-m">2019–Present</span></div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df_housing["date"], y=df_housing["주택착공"], name="Housing Starts (K)", line=dict(color=T['accent'], width=2)))
-    fig.add_trace(go.Scatter(x=df_newsales["date"], y=df_newsales["신규주택판매"], name="New Home Sales (K)", line=dict(color=GOLD, width=2)))
+    fig.add_trace(go.Scatter(
+        x=df_housing["date"], y=df_housing["주택착공"], name="Housing Starts (K)",
+        line=dict(color=T['accent'], width=2),
+        hovertemplate="%{x|%Y-%m-%d}<br>Housing Starts: %{y:,.0f}K<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_newsales["date"], y=df_newsales["신규주택판매"], name="New Home Sales (K)",
+        line=dict(color=GOLD, width=2),
+        hovertemplate="%{x|%Y-%m-%d}<br>New Home Sales: %{y:,.0f}K<extra></extra>",
+    ))
     chart_layout(fig, 320)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+    excel_download_button(
+        "📊 Housing 데이터 엑셀 다운로드",
+        {
+            "Housing Starts": df_housing,
+            "New Home Sales": df_newsales,
+            "Mortgage": df_mortgage,
+        },
+        f"kcc_lvt_housing_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "housing_excel_download",
+    )
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
@@ -1276,11 +1395,28 @@ elif menu == "📈 Macro":
     st.markdown('<div class="sec"><span class="sec-t">Macro Indicators</span><span class="sec-s">CPI · 기준금리</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">CPI & Fed Funds Rate</span><span class="p-m">2019–Present</span></div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df_cpi["date"], y=df_cpi["CPI"], name="CPI", line=dict(color=GOLD, width=2)))
-    fig.add_trace(go.Scatter(x=df_fedfunds["date"], y=df_fedfunds["기준금리"], name="Fed Funds (%)", yaxis="y2", line=dict(color=T['accent'], width=2, dash="dot")))
+    fig.add_trace(go.Scatter(
+        x=df_cpi["date"], y=df_cpi["CPI"], name="CPI",
+        line=dict(color=GOLD, width=2),
+        hovertemplate="%{x|%Y-%m-%d}<br>CPI: %{y:,.2f}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_fedfunds["date"], y=df_fedfunds["기준금리"], name="Fed Funds (%)", yaxis="y2",
+        line=dict(color=T['accent'], width=2, dash="dot"),
+        hovertemplate="%{x|%Y-%m-%d}<br>Fed Funds: %{y:.2f}%<extra></extra>",
+    ))
     fig.update_layout(yaxis2=dict(overlaying="y", side="right", gridcolor='rgba(0,0,0,0)'))
     chart_layout(fig, 320)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+    excel_download_button(
+        "📊 Macro 데이터 엑셀 다운로드",
+        {
+            "CPI": df_cpi,
+            "Fed Funds": df_fedfunds,
+        },
+        f"kcc_lvt_macro_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "macro_excel_download",
+    )
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
@@ -1302,6 +1438,15 @@ elif menu == "💱 FX/Tariff":
     ])
     st.dataframe(tref, use_container_width=True, hide_index=True)
     st.caption("⚠️ 참고용 · 실제 통관 시 관세사·세관 확인 필요")
+    excel_download_button(
+        "📊 FX/Tariff 데이터 엑셀 다운로드",
+        {
+            "FX": df_fx,
+            "Tariff Reference": tref,
+        },
+        f"kcc_lvt_fx_tariff_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "fx_tariff_excel_download",
+    )
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">📰 관세·무역 뉴스</span><span class="p-m">RSS</span></div><div class="p-body">', unsafe_allow_html=True)
     tnews = llm.fetch_news("tariff", limit=6)

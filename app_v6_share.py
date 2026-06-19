@@ -53,6 +53,8 @@ LOGO_NAVY  = _logo("logo_navy_t.png")   # 라이트 모드 대비용
 # ── 테마 상태 ─────────────────────────────────────────────────
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
+if "font_size_mode" not in st.session_state:
+    st.session_state.font_size_mode = "기본"
 
 # ════════════════════════════════════════════════════════════
 # CSS — Bloomberg Terminal Style (다크/라이트 CSS 변수)
@@ -74,6 +76,10 @@ THEME_VARS = {
 T = THEME_VARS[st.session_state.theme]
 NAVY = "#0E2372"
 GOLD = "#E8B339"
+FONT_SCALE = {"기본": 1.0, "크게": 1.12, "아주 크게": 1.24}.get(st.session_state.font_size_mode, 1.0)
+
+def fs(px):
+    return round(px * FONT_SCALE, 2)
 
 st.markdown(f"""
 <style>
@@ -183,6 +189,30 @@ st.markdown(f"""
 div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['border']}; }}
 [data-testid="stMetricValue"] {{ font-family:'SF Mono','Consolas',monospace; color:{T['text']}; }}
 [data-testid="stMetricLabel"] {{ color:{T['text2']}; }}
+
+/* 글자 크기 토글 보정 */
+[data-testid="stSidebar"] [role="radiogroup"] label {{ font-size:{fs(13)}px !important; }}
+.sec-t {{ font-size:{fs(16)}px; }}
+.sec-s {{ font-size:{fs(11)}px; }}
+.kpi-n {{ font-size:{fs(10)}px; }}
+.kpi-v {{ font-size:{fs(21)}px; }}
+.kpi-c {{ font-size:{fs(11)}px; }}
+.p-t {{ font-size:{fs(12)}px; }}
+.p-m {{ font-size:{fs(10)}px; }}
+.dt {{ font-size:{fs(12)}px; }}
+.dt th {{ font-size:{fs(10)}px; }}
+.ai {{ font-size:{fs(12.5)}px; }}
+.news a {{ font-size:{fs(12)}px; }}
+.news-t {{ font-size:{fs(10)}px; }}
+.summary-k {{ font-size:{fs(10)}px; }}
+.summary-v {{ font-size:{fs(13)}px; }}
+.report-note {{ font-size:{fs(12)}px; }}
+.placeholder {{ font-size:{fs(13)}px; }}
+[data-testid="stNumberInput"] label, [data-testid="stTextInput"] label {{ font-size:{fs(11)}px !important; }}
+[data-testid="stNumberInput"] input, [data-testid="stTextInput"] input {{ font-size:{fs(13)}px !important; }}
+.stButton button {{ font-size:{fs(12)}px; }}
+[data-testid="stMetricValue"] {{ font-size:{fs(26)}px !important; }}
+[data-testid="stMetricLabel"] {{ font-size:{fs(13)}px !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -257,6 +287,76 @@ def build_market_compare_rows(rows):
             "</tr>"
         )
     return html_rows
+
+PURCHASE_PRICE_DEFAULTS = [
+    {"월": "2025-01", "PVC": 726.33, "DOTP": 1042.50},
+    {"월": "2025-02", "PVC": 717.50, "DOTP": 1025.00},
+    {"월": "2025-03", "PVC": 701.75, "DOTP": 1017.00},
+    {"월": "2025-04", "PVC": 692.50, "DOTP": 993.75},
+    {"월": "2025-05", "PVC": 692.50, "DOTP": 971.25},
+    {"월": "2025-06", "PVC": 707.50, "DOTP": 990.00},
+    {"월": "2025-07", "PVC": 701.25, "DOTP": 990.00},
+    {"월": "2025-08", "PVC": 698.00, "DOTP": 970.00},
+    {"월": "2025-09", "PVC": 703.00, "DOTP": 955.00},
+    {"월": "2025-10", "PVC": 688.00, "DOTP": 908.33},
+    {"월": "2025-11", "PVC": 671.25, "DOTP": 871.25},
+    {"월": "2025-12", "PVC": 635.00, "DOTP": 914.00},
+    {"월": "2026-01", "PVC": 652.50, "DOTP": 941.25},
+    {"월": "2026-02", "PVC": 693.33, "DOTP": 970.00},
+    {"월": "2026-03", "PVC": 907.69, "DOTP": 1110.00},
+    {"월": "2026-04", "PVC": 1022.50, "DOTP": 1317.50},
+    {"월": "2026-05", "PVC": 894.50, "DOTP": 1196.25},
+    {"월": "2026-06", "PVC": 817.50, "DOTP": None},
+]
+
+def get_purchase_price_df():
+    if "purchase_price_rows" not in st.session_state:
+        st.session_state.purchase_price_rows = PURCHASE_PRICE_DEFAULTS
+    df = pd.DataFrame(st.session_state.purchase_price_rows)
+    if "월" not in df.columns:
+        df["월"] = pd.Series(dtype="str")
+    for col in ["PVC", "DOTP"]:
+        if col not in df.columns:
+            df[col] = None
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["date"] = pd.to_datetime(df["월"] + "-01", errors="coerce")
+    df = df.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    return df
+
+def set_purchase_price_df(df):
+    clean = df.copy()
+    clean["월"] = clean["월"].astype(str).str.slice(0, 7)
+    for col in ["PVC", "DOTP"]:
+        clean[col] = pd.to_numeric(clean[col], errors="coerce")
+    clean["date"] = pd.to_datetime(clean["월"] + "-01", errors="coerce")
+    clean = clean.dropna(subset=["date"]).sort_values("date")
+    st.session_state.purchase_price_rows = clean[["월", "PVC", "DOTP"]].to_dict("records")
+    return get_purchase_price_df()
+
+def purchase_compare_row(label, df, col):
+    clean = df[["date", col]].dropna().copy()
+    if len(clean) == 0:
+        return {
+            "label": label, "unit": "구매팀 지수", "date": "N/A", "current": "N/A",
+            "prev_month": "N/A", "mom": fmt_change(None),
+            "prev_year": "N/A", "yoy": fmt_change(None),
+        }
+    last = clean.iloc[-1]
+    current = last[col]
+    base_date = pd.Timestamp(last["date"])
+    pm, _ = asof_value(clean, col, base_date - pd.DateOffset(months=1))
+    py, _ = asof_value(clean, col, base_date - pd.DateOffset(years=1))
+    value_fmt = lambda v: "N/A" if v is None else f"{v:,.2f}"
+    return {
+        "label": label,
+        "unit": "구매팀 지수",
+        "date": base_date.strftime("%Y-%m"),
+        "current": value_fmt(current),
+        "prev_month": value_fmt(pm),
+        "mom": fmt_change(pct_change(current, pm)),
+        "prev_year": value_fmt(py),
+        "yoy": fmt_change(pct_change(current, py)),
+    }
 
 def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
                          v_fedfunds, usd_krw, v_wti, d_wti):
@@ -465,6 +565,7 @@ df_brent    = get_fred('DCOILBRENTEU',  'Brent')
 df_fx       = get_fred('DEXKOUS',       'USD/KRW')
 usd_krw     = get_exchange_rate()
 init_session_state(usd_krw)
+df_purchase = get_purchase_price_df()
 
 v_housing  = latest(df_housing,  '주택착공')
 v_mortgage = latest(df_mortgage, '모기지금리')
@@ -473,12 +574,16 @@ v_fedfunds = latest(df_fedfunds, '기준금리')
 v_wti      = latest(df_wti,      'WTI')
 v_brent    = latest(df_brent,    'Brent')
 v_fx_hist  = latest(df_fx,       'USD/KRW')
+v_pvc      = latest(df_purchase, 'PVC')
+v_dotp     = latest(df_purchase, 'DOTP')
 d_housing  = delta_pct(df_housing,  '주택착공')
 d_mortgage = delta_pct(df_mortgage, '모기지금리')
 d_cpi      = delta_pct(df_cpi,      'CPI')
 d_wti      = delta_pct(df_wti,      'WTI')
 d_brent    = delta_pct(df_brent,    'Brent')
 d_fx       = delta_pct(df_fx,       'USD/KRW', periods=20)
+d_pvc      = delta_pct(df_purchase, 'PVC')
+d_dotp     = delta_pct(df_purchase, 'DOTP')
 
 def chart_layout(fig, height=240):
     fig.update_layout(
@@ -509,6 +614,14 @@ with st.sidebar:
     if st.button(theme_label, use_container_width=True):
         st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
         st.rerun()
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    st.radio(
+        "글자 크기",
+        ["기본", "크게", "아주 크게"],
+        key="font_size_mode",
+        horizontal=False,
+    )
 
     st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
     fred_ok = "🟢" if api_key and "여기에" not in api_key else "⚪"
@@ -680,6 +793,38 @@ if menu == "📊 Overview":
         st.markdown('<div class="placeholder"><span style="font-size:26px">💱</span><span>환율 시계열을 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">PVC / DOTP Purchase Index</span><span class="p-m">Purchasing team · Monthly</span></div><div class="p-body">', unsafe_allow_html=True)
+    dfp_recent = df_purchase.tail(14)
+    if len(dfp_recent):
+        fig_raw_idx = go.Figure()
+        fig_raw_idx.add_trace(go.Scatter(
+            x=dfp_recent["date"], y=dfp_recent["PVC"], name="PVC",
+            mode="lines+markers", line=dict(color=T['accent'], width=2.5),
+            hovertemplate="%{x|%Y-%m}<br>PVC: %{y:,.2f}<extra></extra>",
+        ))
+        fig_raw_idx.add_trace(go.Scatter(
+            x=dfp_recent["date"], y=dfp_recent["DOTP"], name="DOTP",
+            mode="lines+markers", line=dict(color=GOLD, width=2.5),
+            hovertemplate="%{x|%Y-%m}<br>DOTP: %{y:,.2f}<extra></extra>",
+        ))
+        chart_layout(fig_raw_idx, 230)
+        fig_raw_idx.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_raw_idx, use_container_width=True, config={"displayModeBar": False})
+        pvc_row = purchase_compare_row("PVC", df_purchase, "PVC")
+        dotp_row = purchase_compare_row("DOTP", df_purchase, "DOTP")
+        st.markdown(
+            f"""
+            <table class="dt">
+              <thead><tr><th>지표</th><th>단위</th><th>기준월</th><th>현재</th><th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th></tr></thead>
+              <tbody>{build_market_compare_rows([pvc_row, dotp_row])}</tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">🧪</span><span>PVC/DOTP 구매팀 지수를 입력하면 표시됩니다</span></div>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     v_newsales = latest(df_newsales, "신규주택판매")
     market_summary = build_market_summary(
         v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
@@ -692,6 +837,8 @@ if menu == "📊 Overview":
         ["CPI Index", f"{v_cpi:.1f}", f"{d_cpi:+.1f}%"],
         ["Fed Funds", f"{v_fedfunds:.2f}%", "정책금리"],
         ["USD/KRW", f"{usd_krw:,.0f}", f"20거래일 {d_fx:+.1f}%"],
+        ["PVC", f"{v_pvc:,.2f}", f"{d_pvc:+.1f}% MoM"],
+        ["DOTP", f"{v_dotp:,.2f}", f"{d_dotp:+.1f}% MoM"],
         ["WTI", f"${v_wti:.1f}", f"{d_wti:+.1f}%"],
     ]
 
@@ -734,12 +881,81 @@ elif menu == "🛢 원자재":
         return f'<div class="kpi-c {cls}">{arr} {abs(v):.1f}{unit}</div>'
 
     st.markdown(f"""
-    <div class="kpi-strip" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi-strip" style="grid-template-columns:repeat(5,1fr);">
       <div class="kpi"><div class="kpi-n">WTI 원유</div><div class="kpi-v">{v_wti:,.1f}<span style="font-size:12px;color:{T['text3']}">$</span></div>{chg2(d_wti)}</div>
       <div class="kpi"><div class="kpi-n">Brent 원유</div><div class="kpi-v">{v_brent:,.1f}<span style="font-size:12px;color:{T['text3']}">$</span></div>{chg2(d_brent)}</div>
       <div class="kpi"><div class="kpi-n">USD / KRW</div><div class="kpi-v">{usd_krw:,.0f}</div><div class="kpi-c fl">실시간</div></div>
+      <div class="kpi"><div class="kpi-n">PVC</div><div class="kpi-v">{v_pvc:,.2f}</div>{chg2(d_pvc)}</div>
+      <div class="kpi"><div class="kpi-n">DOTP</div><div class="kpi-v">{v_dotp:,.2f}</div>{chg2(d_dotp)}</div>
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">PVC / DOTP 구매팀 월별 지수</span><span class="p-m">Manual monthly update</span></div><div class="p-body">', unsafe_allow_html=True)
+    edit_col, guide_col = st.columns([2, 1], gap="medium")
+    with edit_col:
+        edited_purchase = st.data_editor(
+            df_purchase[["월", "PVC", "DOTP"]],
+            hide_index=True,
+            use_container_width=True,
+            num_rows="dynamic",
+            key="purchase_price_editor",
+            column_config={
+                "월": st.column_config.TextColumn("월", help="YYYY-MM 형식으로 입력"),
+                "PVC": st.column_config.NumberColumn("PVC", format="%.2f"),
+                "DOTP": st.column_config.NumberColumn("DOTP", format="%.2f"),
+            },
+        )
+        df_purchase = set_purchase_price_df(edited_purchase)
+    with guide_col:
+        if st.button("기본값으로 되돌리기", use_container_width=True, key="reset_purchase_price"):
+            st.session_state.purchase_price_rows = PURCHASE_PRICE_DEFAULTS
+            st.rerun()
+        st.markdown(
+            f"""
+            <div class="report-note">
+            구매팀에서 월별 지수를 받으면 이 표의 마지막 행을 추가/수정하면 됩니다.<br>
+            단, 웹 화면 입력값은 현재 접속 세션 기준입니다. 전체 사용자에게 고정 반영하려면 업데이트된 월별 값을 코드에 반영해 GitHub에 다시 올리는 방식이 가장 안정적입니다.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    dfp = df_purchase.copy()
+    if len(dfp):
+        fig_purchase = go.Figure()
+        fig_purchase.add_trace(go.Scatter(
+            x=dfp["date"], y=dfp["PVC"], name="PVC",
+            mode="lines+markers", line=dict(color=T['accent'], width=2.5),
+            hovertemplate="%{x|%Y-%m}<br>PVC: %{y:,.2f}<extra></extra>",
+        ))
+        fig_purchase.add_trace(go.Scatter(
+            x=dfp["date"], y=dfp["DOTP"], name="DOTP",
+            mode="lines+markers", line=dict(color=GOLD, width=2.5),
+            hovertemplate="%{x|%Y-%m}<br>DOTP: %{y:,.2f}<extra></extra>",
+        ))
+        chart_layout(fig_purchase, 290)
+        fig_purchase.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_purchase, use_container_width=True, config={"displayModeBar": False})
+
+        purchase_rows = [
+            purchase_compare_row("PVC", dfp, "PVC"),
+            purchase_compare_row("DOTP", dfp, "DOTP"),
+        ]
+        st.markdown(
+            f"""
+            <table class="dt">
+              <thead>
+                <tr>
+                  <th>지표</th><th>단위</th><th>기준월</th><th>현재</th>
+                  <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+                </tr>
+              </thead>
+              <tbody>{build_market_compare_rows(purchase_rows)}</tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     # 기간 선택
     period = st.radio("기간", ["1년", "3년", "전체"], horizontal=True, label_visibility="collapsed", key="oil_period")

@@ -218,6 +218,14 @@ st.markdown(f"""
   background:{T['panel2']} !important; color:{T['text']} !important; border:1px solid {T['border']} !important; font-size:13px !important; font-family:'SF Mono','Consolas',monospace; }}
 .stButton button {{ background:{T['accent']}; color:#fff; border:none; border-radius:7px; font-weight:600; font-size:12px; }}
 .stButton button:hover {{ filter:brightness(1.1); color:#fff; border:none; }}
+[data-testid="stDownloadButton"] button {{
+  background:{T['accent']} !important; color:#fff !important; border:1px solid {T['accent']} !important;
+  border-radius:7px !important; font-weight:800 !important; font-size:12px !important;
+}}
+[data-testid="stDownloadButton"] button:hover {{
+  filter:brightness(1.1); color:#fff !important; border-color:{T['accent']} !important;
+}}
+[data-testid="stDownloadButton"] button * {{ color:#fff !important; }}
 div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['border']}; }}
 [data-testid="stMetricValue"] {{ font-family:'SF Mono','Consolas',monospace; color:{T['text']}; }}
 [data-testid="stMetricLabel"] {{ color:{T['text2']}; }}
@@ -250,6 +258,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
 [data-testid="stNumberInput"] label, [data-testid="stTextInput"] label {{ font-size:{fs(11)}px !important; }}
 [data-testid="stNumberInput"] input, [data-testid="stTextInput"] input {{ font-size:{fs(13)}px !important; }}
 .stButton button {{ font-size:{fs(12)}px; }}
+[data-testid="stDownloadButton"] button {{ font-size:{fs(12)}px !important; }}
 [data-testid="stMetricValue"] {{ font-size:{fs(26)}px !important; }}
 [data-testid="stMetricLabel"] {{ font-size:{fs(13)}px !important; }}
 [data-testid="stRadio"] label p {{ font-size:{fs(13)}px !important; }}

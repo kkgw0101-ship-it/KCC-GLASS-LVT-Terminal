@@ -1783,7 +1783,7 @@ elif menu == "💱 FX/Tariff":
         {"시점": "2026.07.07", "구분": "의견 수렴", "핵심 내용": "공청회 등 의견수렴 후 최종 확정 예정. 대체 관세 도입 가능성 모니터링 필요"},
     ])
     tariff_scenario = pd.DataFrame([
-        {"원산지": "한국산", "기존 구조": "한미 FTA 0%", "현재/예상 부담": "글로벌 10% + 추가 12.5% 확정 시 22.5%", "영업 메시지": "기존 FTA 0% 논리는 약화되나 중국산 대비 우위는 유지"},
+        {"원산지": "한국산", "기존 구조": "한미 FTA 0%", "현재/예상 부담": "글로벌 10%에서 2.5%p 추가 시 총 12.5%", "영업 메시지": "기존 FTA 0% 논리는 약화되나 중국산 대비 우위는 유지"},
         {"원산지": "중국산", "기존 구조": "기본 5.3% + Section 301 25%", "현재/예상 부담": "글로벌 10% 포함 약 40.3% 수준", "영업 메시지": "한국산과의 관세 격차 약 28~30%p 유지"},
     ])
     tariff_actions = pd.DataFrame([
@@ -1797,7 +1797,7 @@ elif menu == "💱 FX/Tariff":
         f"""
         <div class="summary-grid">
           <div class="summary-card"><div class="summary-k">현 상황</div><div class="summary-v">122조 기반 10% 글로벌 관세가 적용 중이며, 2026.07.24 만료 전후 관세 공백과 정책 불확실성 확인이 필요합니다.</div></div>
-          <div class="summary-card"><div class="summary-k">한국산 리스크</div><div class="summary-v">12.5% 추가 관세안에 한국이 포함되어 기존 FTA 0% 영업논리는 일부 약화될 수 있습니다.</div></div>
+          <div class="summary-card"><div class="summary-k">한국산 리스크</div><div class="summary-v">한국산은 기존 글로벌 10%에서 2.5%p가 추가되어 총 12.5%가 될 가능성이 있어, FTA 0% 영업논리는 일부 약화될 수 있습니다.</div></div>
           <div class="summary-card"><div class="summary-k">셀링포인트</div><div class="summary-v">중국산 대비 관세 격차는 약 28~30%p 유지될 가능성이 높아, 전환 영업 메시지는 여전히 유효합니다.</div></div>
         </div>
         <div class="report-note">첨부 보고자료의 핵심을 대시보드용으로 요약했습니다. 실제 적용 전에는 확정 고시와 관세사 검토가 필요합니다.</div>

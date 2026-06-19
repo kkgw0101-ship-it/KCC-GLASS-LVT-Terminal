@@ -297,6 +297,44 @@ def build_market_compare_rows(rows):
         )
     return html_rows
 
+def indicator_compare_row(label, df, col, unit="", decimals=1, current_override=None):
+    clean = df[(df[col].notna()) & (df[col] > 0)].copy()
+    if len(clean) == 0:
+        return {
+            "label": label, "unit": unit or "-",
+            "date": "N/A", "current": "N/A", "prev_month": "N/A",
+            "mom": fmt_change(None), "prev_year": "N/A", "yoy": fmt_change(None),
+        }
+    last = clean.iloc[-1]
+    current = current_override if current_override is not None else last[col]
+    base_date = pd.Timestamp(last["date"])
+    pm, _ = asof_value(clean, col, base_date - pd.DateOffset(months=1))
+    py, _ = asof_value(clean, col, base_date - pd.DateOffset(years=1))
+
+    def value_fmt(v):
+        if v is None or pd.isna(v):
+            return "N/A"
+        if unit == "%":
+            return f"{v:,.2f}%"
+        if unit == "K":
+            return f"{v:,.0f}K"
+        if unit == "KRW/USD":
+            return f"{v:,.0f}"
+        if unit == "$/bbl":
+            return f"${v:,.{decimals}f}"
+        return f"{v:,.{decimals}f}"
+
+    return {
+        "label": label,
+        "unit": unit or "-",
+        "date": base_date.strftime("%Y-%m-%d"),
+        "current": value_fmt(current),
+        "prev_month": value_fmt(pm),
+        "mom": fmt_change(pct_change(current, pm)),
+        "prev_year": value_fmt(py),
+        "yoy": fmt_change(pct_change(current, py)),
+    }
+
 PURCHASE_PRICE_DEFAULTS = [
     {"월": "2025-01", "PVC": 726.33, "DOTP": 1042.50},
     {"월": "2025-02", "PVC": 717.50, "DOTP": 1025.00},
@@ -881,6 +919,25 @@ if menu == "📊 Overview":
         )
         chart_layout(fig, 260)
         st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+        overview_housing_rows = [
+            indicator_compare_row("Housing Starts", df_housing, "주택착공", "K", 0),
+            indicator_compare_row("New Home Sales", df_newsales, "신규주택판매", "K", 0),
+            indicator_compare_row("30Y Mortgage", df_mortgage, "모기지금리", "%", 2),
+        ]
+        st.markdown(
+            f"""
+            <table class="dt">
+              <thead>
+                <tr>
+                  <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+                  <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+                </tr>
+              </thead>
+              <tbody>{build_market_compare_rows(overview_housing_rows)}</tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with c2:
@@ -939,6 +996,23 @@ if menu == "📊 Overview":
         st.plotly_chart(fig_fx, use_container_width=True, config=CHART_CONFIG)
         st.markdown(
             f'<div style="color:{T["text3"]};font-size:11px;margin-top:-4px">FRED 일별 환율 흐름에 현재 실시간 환율 {usd_krw:,.0f}원을 점선으로 표시합니다.</div>',
+            unsafe_allow_html=True,
+        )
+        fx_rows = [
+            indicator_compare_row("USD/KRW", df_fx, "USD/KRW", "KRW/USD", 0, current_override=usd_krw),
+        ]
+        st.markdown(
+            f"""
+            <table class="dt" style="margin-top:10px">
+              <thead>
+                <tr>
+                  <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+                  <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+                </tr>
+              </thead>
+              <tbody>{build_market_compare_rows(fx_rows)}</tbody>
+            </table>
+            """,
             unsafe_allow_html=True,
         )
     else:
@@ -1610,6 +1684,26 @@ elif menu == "🏡 Housing":
     ))
     chart_layout(fig, 320)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+    housing_rows = [
+        indicator_compare_row("Housing Starts", df_housing, "주택착공", "K", 0),
+        indicator_compare_row("New Home Sales", df_newsales, "신규주택판매", "K", 0),
+        indicator_compare_row("30Y Mortgage", df_mortgage, "모기지금리", "%", 2),
+    ]
+    st.markdown(
+        f"""
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+              <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+            </tr>
+          </thead>
+          <tbody>{build_market_compare_rows(housing_rows)}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("전월/전년 값은 해당 기준일 이전의 가장 가까운 발표값 기준입니다.")
     excel_download_button(
         "📊 Housing 데이터 엑셀 다운로드",
         {
@@ -1642,6 +1736,25 @@ elif menu == "📈 Macro":
     fig.update_layout(yaxis2=dict(overlaying="y", side="right", gridcolor='rgba(0,0,0,0)'))
     chart_layout(fig, 320)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+    macro_rows = [
+        indicator_compare_row("CPI", df_cpi, "CPI", "-", 2),
+        indicator_compare_row("Fed Funds", df_fedfunds, "기준금리", "%", 2),
+    ]
+    st.markdown(
+        f"""
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+              <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+            </tr>
+          </thead>
+          <tbody>{build_market_compare_rows(macro_rows)}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("전월/전년 값은 해당 기준일 이전의 가장 가까운 발표값 기준입니다.")
     excel_download_button(
         "📊 Macro 데이터 엑셀 다운로드",
         {
@@ -1662,6 +1775,45 @@ elif menu == "💱 FX/Tariff":
     with c1: st.metric("USD / KRW", f"{usd_krw:,.0f}")
     with c2: st.metric("관세율 (임시)", f"{st.session_state.sim_duty:.0f}%")
     with c3: st.metric("기본 관세 (FTA)", "0%")
+    tariff_timeline = pd.DataFrame([
+        {"시점": "2026.02", "구분": "상호관세 판결", "핵심 내용": "미 연방대법원, IEEPA 근거 상호관세 위법 판결로 상호관세 무력화"},
+        {"시점": "2026.03", "구분": "301조 조사 착수", "핵심 내용": "USTR, 과잉생산·강제노동 명분으로 무역법 301조 조사 착수"},
+        {"시점": "현재 적용", "구분": "122조 글로벌 관세", "핵심 내용": "무역법 122조 기반 10% 글로벌 관세 부과 중. 2026.07.24 만료 예정"},
+        {"시점": "2026.06.02", "구분": "추가 관세안", "핵심 내용": "강제노동 분야 60개국 대상 10%/12.5% 추가 관세안 발표. 한국은 12.5% 그룹 포함"},
+        {"시점": "2026.07.07", "구분": "의견 수렴", "핵심 내용": "공청회 등 의견수렴 후 최종 확정 예정. 대체 관세 도입 가능성 모니터링 필요"},
+    ])
+    tariff_scenario = pd.DataFrame([
+        {"원산지": "한국산", "기존 구조": "한미 FTA 0%", "현재/예상 부담": "글로벌 10% + 추가 12.5% 확정 시 22.5%", "영업 메시지": "기존 FTA 0% 논리는 약화되나 중국산 대비 우위는 유지"},
+        {"원산지": "중국산", "기존 구조": "기본 5.3% + Section 301 25%", "현재/예상 부담": "글로벌 10% 포함 약 40.3% 수준", "영업 메시지": "한국산과의 관세 격차 약 28~30%p 유지"},
+    ])
+    tariff_actions = pd.DataFrame([
+        {"영역": "단기", "대응 방향": "2026.07.24 이전 선적 가능 물량 선제 출고 협의 및 계약 타이밍 점검"},
+        {"영역": "가격", "대응 방향": "12.5% 확정 대비 관세 분담 시나리오를 사전 수립하고 가격 통보에 반영"},
+        {"영역": "영업", "대응 방향": "한국산도 일부 관세 부담이 생기지만 중국산 대비 30%p 내외 우위 메시지 재정비"},
+        {"영역": "모니터링", "대응 방향": "2026.07.07 청문회, 최종 확정안, 총 15% 협상 결과를 지속 추적"},
+    ])
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">미국 추가 관세 대응 브리핑</span><span class="p-m">USTR · Scenario</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="summary-grid">
+          <div class="summary-card"><div class="summary-k">현 상황</div><div class="summary-v">122조 기반 10% 글로벌 관세가 적용 중이며, 2026.07.24 만료 전후 관세 공백과 정책 불확실성 확인이 필요합니다.</div></div>
+          <div class="summary-card"><div class="summary-k">한국산 리스크</div><div class="summary-v">12.5% 추가 관세안에 한국이 포함되어 기존 FTA 0% 영업논리는 일부 약화될 수 있습니다.</div></div>
+          <div class="summary-card"><div class="summary-k">셀링포인트</div><div class="summary-v">중국산 대비 관세 격차는 약 28~30%p 유지될 가능성이 높아, 전환 영업 메시지는 여전히 유효합니다.</div></div>
+        </div>
+        <div class="report-note">첨부 보고자료의 핵심을 대시보드용으로 요약했습니다. 실제 적용 전에는 확정 고시와 관세사 검토가 필요합니다.</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(tariff_timeline, use_container_width=True, hide_index=True)
+    c_scenario, c_action = st.columns([1.1, 1], gap="medium")
+    with c_scenario:
+        st.markdown(f'<div style="font-size:12px;font-weight:700;color:{T["text"]};margin:8px 0">관세 구조 시나리오</div>', unsafe_allow_html=True)
+        st.dataframe(tariff_scenario, use_container_width=True, hide_index=True)
+    with c_action:
+        st.markdown(f'<div style="font-size:12px;font-weight:700;color:{T["text"]};margin:8px 0">당사 대응 방안</div>', unsafe_allow_html=True)
+        st.dataframe(tariff_actions, use_container_width=True, hide_index=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">📋 LVT 관세 참고 (미국 수입)</span><span class="p-m">실무 참고용</span></div><div class="p-body">', unsafe_allow_html=True)
     tref = pd.DataFrame([
         {"구분": "HTS 코드", "내용": "3918.10 (비닐 바닥재)", "비고": "품목분류 변동 가능"},
@@ -1677,6 +1829,9 @@ elif menu == "💱 FX/Tariff":
         {
             "FX": df_fx,
             "Tariff Reference": tref,
+            "Tariff Timeline": tariff_timeline,
+            "Tariff Scenario": tariff_scenario,
+            "Tariff Actions": tariff_actions,
         },
         f"kcc_lvt_fx_tariff_{datetime.now().strftime('%Y%m%d')}.xlsx",
         "fx_tariff_excel_download",

@@ -1936,17 +1936,17 @@ elif menu == "📰 FCW News":
         )
         summary_html = f'<div class="fcw-summary">{summary}</div>' if summary else ""
         klass = "fcw-card featured" if featured else "fcw-card"
-        return f"""
-        <article class="{klass}">
-          <a class="fcw-media" href="{link}" target="_blank" rel="noopener noreferrer">{media}</a>
-          <div class="fcw-body">
-            <div class="fcw-meta">{published} · Floor Covering Weekly</div>
-            <a class="fcw-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>
-            {summary_html}
-            <a class="fcw-read" href="{link}" target="_blank" rel="noopener noreferrer">Read More →</a>
-          </div>
-        </article>
-        """
+        return (
+            f'<div class="{klass}">'
+            f'<div class="fcw-media">{media}</div>'
+            f'<div class="fcw-body">'
+            f'<div class="fcw-meta">{published} · Floor Covering Weekly</div>'
+            f'<a class="fcw-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>'
+            f'{summary_html}'
+            f'<a class="fcw-read" href="{link}" target="_blank" rel="noopener noreferrer">Read More &rarr;</a>'
+            f'</div>'
+            f'</div>'
+        )
 
     left, right = st.columns([2, 1], gap="medium")
     with left:

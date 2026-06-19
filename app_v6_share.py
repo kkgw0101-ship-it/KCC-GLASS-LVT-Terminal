@@ -190,10 +190,10 @@ st.markdown(f"""
 .freight-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; display:grid; grid-template-columns:118px 1fr; min-height:128px; transition:transform .15s ease, border-color .15s ease; }}
 .freight-card:hover {{ transform:translateY(-2px); border-color:{T['accent']}; }}
 .freight-card.featured {{ grid-template-columns:1fr; min-height:230px; }}
-.freight-visual {{ background:linear-gradient(135deg,#0E2372 0%,#1E3A8A 48%,#E8B339 100%); display:flex; flex-direction:column; justify-content:space-between; padding:12px; color:#fff; }}
+.freight-visual {{ background-size:cover; background-position:center; display:flex; flex-direction:column; justify-content:space-between; padding:12px; color:#fff; min-height:128px; }}
 .freight-card.featured .freight-visual {{ min-height:118px; }}
-.freight-badge {{ font-size:10px; font-weight:900; letter-spacing:1px; color:rgba(255,255,255,.82); }}
-.freight-mark {{ font-size:24px; font-weight:900; line-height:1; }}
+.freight-badge {{ font-size:10px; font-weight:900; letter-spacing:1px; color:rgba(255,255,255,.86); text-shadow:0 1px 3px rgba(0,0,0,.6); }}
+.freight-mark {{ font-size:24px; font-weight:900; line-height:1; text-shadow:0 2px 8px rgba(0,0,0,.65); }}
 .freight-body {{ padding:13px 14px; display:flex; flex-direction:column; gap:7px; }}
 .freight-meta {{ color:{T['text3']}; font-size:10px; font-family:'SF Mono','Consolas',monospace; line-height:1.4; }}
 .freight-title {{ color:{T['text']}; font-size:15px; line-height:1.35; font-weight:800; text-decoration:none; }}
@@ -1687,17 +1687,61 @@ elif menu == "🚢 Freight":
     with cN:
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">물류·운임 뉴스</span><span class="p-m">Google News RSS</span></div><div class="p-body">', unsafe_allow_html=True)
         news = llm.fetch_news("freight", limit=8)
+        freight_visuals = {
+            "PORT": {
+                "label": "PORT",
+                "badge": "PORT / TERMINAL",
+                "image": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=700&q=75",
+            },
+            "RATE": {
+                "label": "RATE",
+                "badge": "FREIGHT RATE",
+                "image": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=700&q=75",
+            },
+            "OCEAN": {
+                "label": "OCEAN",
+                "badge": "OCEAN CARRIER",
+                "image": "https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=700&q=75",
+            },
+            "CAPA": {
+                "label": "CAPA",
+                "badge": "CAPACITY",
+                "image": "https://images.unsplash.com/photo-1494412651409-8963ce7935a7?auto=format&fit=crop&w=700&q=75",
+            },
+            "RISK": {
+                "label": "RISK",
+                "badge": "SUPPLY RISK",
+                "image": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=700&q=75",
+            },
+        }
+        def classify_freight_news(title):
+            t = title.lower()
+            if any(k in t for k in ["port", "terminal", "congestion", "strike", "longshore", "dockworker", "la/lb", "los angeles", "long beach"]):
+                return "PORT"
+            if any(k in t for k in ["rate", "rates", "scfi", "ccfi", "spot", "index", "contract", "pricing"]):
+                return "RATE"
+            if any(k in t for k in ["capacity", "container", "equipment", "space", "blank sailing", "volume", "demand", "supply"]):
+                return "CAPA"
+            if any(k in t for k in ["risk", "tariff", "red sea", "suez", "panama", "disruption", "weather", "war", "delay"]):
+                return "RISK"
+            if any(k in t for k in ["ocean", "carrier", "vessel", "ship", "shipping", "sailing", "transpacific"]):
+                return "OCEAN"
+            return "OCEAN"
         def freight_news_card(item, idx=0):
             title = html.escape(item.get("title", ""))
             link = html.escape(item.get("link", ""))
             published = html.escape((item.get("published", "") or "Latest")[:22])
             source = html.escape(item.get("source", "") or "Market News")
-            marks = ["SCFI", "PORT", "RATE", "OCEAN", "CAPA", "RISK"]
-            mark = marks[idx % len(marks)]
+            visual_key = classify_freight_news(item.get("title", ""))
+            visual = freight_visuals[visual_key]
+            mark = visual["label"]
+            badge = visual["badge"]
+            image = visual["image"]
+            bg = f"linear-gradient(135deg,rgba(14,35,114,.90),rgba(10,14,20,.42)),url('{image}')"
             klass = "freight-card featured" if idx == 0 else "freight-card"
             return (
                 f'<div class="{klass}">'
-                f'<div class="freight-visual"><div class="freight-badge">FREIGHT WATCH</div><div class="freight-mark">{mark}</div></div>'
+                f'<div class="freight-visual" style="background-image:{bg}"><div class="freight-badge">{badge}</div><div class="freight-mark">{mark}</div></div>'
                 f'<div class="freight-body">'
                 f'<div class="freight-meta">{published} · {source}</div>'
                 f'<a class="freight-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>'

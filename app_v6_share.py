@@ -13,6 +13,7 @@ from datetime import datetime
 import os
 import base64
 import html
+import json
 
 # .env 파일에서 API 키 자동 로드 (있으면 — 매번 set 안 해도 됨)
 try:
@@ -271,6 +272,13 @@ def fmt_change(value):
     sign = "+" if value > 0 else ""
     return f'<span class="{cls}">{sign}{value:.1f}%</span>'
 
+def kpi_change(value, unit="%"):
+    if value is None or abs(value) < 0.05:
+        return f'<div class="kpi-c fl">— 0.0{unit}</div>'
+    cls = "up" if value > 0 else "dn"
+    arr = "▲" if value > 0 else "▼"
+    return f'<div class="kpi-c {cls}">{arr} {abs(value):.1f}{unit}</div>'
+
 def build_market_compare_rows(rows):
     html_rows = ""
     for r in rows:
@@ -351,6 +359,48 @@ def purchase_compare_row(label, df, col):
         "label": label,
         "unit": "구매팀 지수",
         "date": base_date.strftime("%Y-%m"),
+        "current": value_fmt(current),
+        "prev_month": value_fmt(pm),
+        "mom": fmt_change(pct_change(current, pm)),
+        "prev_year": value_fmt(py),
+        "yoy": fmt_change(pct_change(current, py)),
+    }
+
+def get_freight_index_df():
+    path = os.path.join(os.path.dirname(__file__), "freight_index_records.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            records = json.load(f)
+    except Exception:
+        records = []
+    df = pd.DataFrame(records)
+    if df.empty:
+        return pd.DataFrame(columns=["date", "SCFI", "CCFI"])
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    for col in ["SCFI", "CCFI"]:
+        if col not in df.columns:
+            df[col] = None
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+
+def freight_compare_row(label, df, col):
+    clean = df[["date", col]].dropna().copy()
+    if len(clean) == 0:
+        return {
+            "label": label, "unit": "Index", "date": "N/A", "current": "N/A",
+            "prev_month": "N/A", "mom": fmt_change(None),
+            "prev_year": "N/A", "yoy": fmt_change(None),
+        }
+    last = clean.iloc[-1]
+    current = last[col]
+    base_date = pd.Timestamp(last["date"])
+    pm, _ = asof_value(clean, col, base_date - pd.DateOffset(months=1))
+    py, _ = asof_value(clean, col, base_date - pd.DateOffset(years=1))
+    value_fmt = lambda v: "N/A" if v is None else f"{v:,.2f}"
+    return {
+        "label": label,
+        "unit": "Index",
+        "date": base_date.strftime("%Y-%m-%d"),
         "current": value_fmt(current),
         "prev_month": value_fmt(pm),
         "mom": fmt_change(pct_change(current, pm)),
@@ -566,6 +616,7 @@ df_fx       = get_fred('DEXKOUS',       'USD/KRW')
 usd_krw     = get_exchange_rate()
 init_session_state(usd_krw)
 df_purchase = get_purchase_price_df()
+df_freight  = get_freight_index_df()
 
 v_housing  = latest(df_housing,  '주택착공')
 v_mortgage = latest(df_mortgage, '모기지금리')
@@ -576,6 +627,8 @@ v_brent    = latest(df_brent,    'Brent')
 v_fx_hist  = latest(df_fx,       'USD/KRW')
 v_pvc      = latest(df_purchase, 'PVC')
 v_dotp     = latest(df_purchase, 'DOTP')
+v_scfi     = latest(df_freight,  'SCFI')
+v_ccfi     = latest(df_freight,  'CCFI')
 d_housing  = delta_pct(df_housing,  '주택착공')
 d_mortgage = delta_pct(df_mortgage, '모기지금리')
 d_cpi      = delta_pct(df_cpi,      'CPI')
@@ -584,6 +637,8 @@ d_brent    = delta_pct(df_brent,    'Brent')
 d_fx       = delta_pct(df_fx,       'USD/KRW', periods=20)
 d_pvc      = delta_pct(df_purchase, 'PVC')
 d_dotp     = delta_pct(df_purchase, 'DOTP')
+d_scfi     = delta_pct(df_freight,  'SCFI', periods=4)
+d_ccfi     = delta_pct(df_freight,  'CCFI', periods=4)
 
 def chart_layout(fig, height=240):
     fig.update_layout(
@@ -636,11 +691,12 @@ logo_tag = f'<img class="topbar-logo" src="data:image/png;base64,{LOGO_WHITE}"/>
 def tk(label, val, cls=""):
     return f'<div class="tk"><span class="tk-l">{label}</span><span class="tk-v {cls}">{val}</span></div>'
 
-scfi_val = st.session_state.get("scfi_now", 2543)
+scfi_val = v_scfi or st.session_state.get("scfi_now", 2543)
 ticker_html = (
     tk("USD/KRW", f"{usd_krw:,.0f}") +
     tk("30Y MTG", f"{v_mortgage:.2f}%") +
     tk("FED FUNDS", f"{v_fedfunds:.2f}%") +
+    tk("SCFI", f"{scfi_val:,.0f}", "tk-up" if d_scfi > 0 else "tk-dn") +
     tk("WTI", f"{v_wti:.1f}", "tk-up" if d_wti > 0 else "tk-dn") +
     tk("CPI", f"{v_cpi:.1f}")
 )
@@ -825,6 +881,39 @@ if menu == "📊 Overview":
         st.markdown('<div class="placeholder"><span style="font-size:26px">🧪</span><span>PVC/DOTP 구매팀 지수를 입력하면 표시됩니다</span></div>', unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">SCFI / CCFI Freight Index</span><span class="p-m">NLIC · Weekly</span></div><div class="p-body">', unsafe_allow_html=True)
+    dff_recent = df_freight.tail(52)
+    if len(dff_recent):
+        fig_freight_ov = go.Figure()
+        fig_freight_ov.add_trace(go.Scatter(
+            x=dff_recent["date"], y=dff_recent["SCFI"], name="SCFI",
+            mode="lines+markers", line=dict(color=T['accent'], width=2.5),
+            hovertemplate="%{x|%Y-%m-%d}<br>SCFI: %{y:,.2f}<extra></extra>",
+        ))
+        fig_freight_ov.add_trace(go.Scatter(
+            x=dff_recent["date"], y=dff_recent["CCFI"], name="CCFI",
+            mode="lines+markers", line=dict(color=GOLD, width=2.5),
+            hovertemplate="%{x|%Y-%m-%d}<br>CCFI: %{y:,.2f}<extra></extra>",
+        ))
+        chart_layout(fig_freight_ov, 230)
+        fig_freight_ov.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_freight_ov, use_container_width=True, config={"displayModeBar": False})
+        scfi_row = freight_compare_row("SCFI", df_freight, "SCFI")
+        ccfi_row = freight_compare_row("CCFI", df_freight, "CCFI")
+        st.markdown(
+            f"""
+            <table class="dt">
+              <thead><tr><th>지표</th><th>단위</th><th>기준일</th><th>현재</th><th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th></tr></thead>
+              <tbody>{build_market_compare_rows([scfi_row, ccfi_row])}</tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">🚢</span><span>SCFI/CCFI 데이터를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+    st.caption("출처: 국가물류통합정보센터 국외해상운임지수 엑셀 자료. 전월/전년 값은 기준일 이전 가장 가까운 발표값 기준입니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     v_newsales = latest(df_newsales, "신규주택판매")
     market_summary = build_market_summary(
         v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
@@ -839,6 +928,8 @@ if menu == "📊 Overview":
         ["USD/KRW", f"{usd_krw:,.0f}", f"20거래일 {d_fx:+.1f}%"],
         ["PVC", f"{v_pvc:,.2f}", f"{d_pvc:+.1f}% MoM"],
         ["DOTP", f"{v_dotp:,.2f}", f"{d_dotp:+.1f}% MoM"],
+        ["SCFI", f"{v_scfi:,.2f}", f"4주 {d_scfi:+.1f}%"],
+        ["CCFI", f"{v_ccfi:,.2f}", f"4주 {d_ccfi:+.1f}%"],
         ["WTI", f"${v_wti:.1f}", f"{d_wti:+.1f}%"],
     ]
 
@@ -1035,6 +1126,61 @@ elif menu == "🛢 원자재":
 # ════════════════════════════════════════════════════════════
 elif menu == "🚢 Freight":
     st.markdown('<div class="sec"><span class="sec-t">Freight & Logistics</span><span class="sec-s">운임 뉴스 · AI 위험도 분석</span></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="kpi-strip" style="grid-template-columns:repeat(2,1fr);">
+      <div class="kpi"><div class="kpi-n">SCFI</div><div class="kpi-v">{v_scfi:,.2f}</div>{kpi_change(d_scfi, "%")}</div>
+      <div class="kpi"><div class="kpi-n">CCFI</div><div class="kpi-v">{v_ccfi:,.2f}</div>{kpi_change(d_ccfi, "%")}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    freight_period = st.radio("운임 지수 기간", ["1년", "전체"], horizontal=True, label_visibility="collapsed", key="freight_index_period")
+    dff = df_freight.copy()
+    if freight_period == "1년":
+        dff = dff[dff["date"] >= (pd.Timestamp.now() - pd.Timedelta(days=365))]
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">SCFI / CCFI 추이</span><span class="p-m">국가물류통합정보센터 · Weekly</span></div><div class="p-body">', unsafe_allow_html=True)
+    if len(dff):
+        fig_ship = go.Figure()
+        fig_ship.add_trace(go.Scatter(
+            x=dff["date"], y=dff["SCFI"], name="SCFI",
+            mode="lines+markers", line=dict(color=T['accent'], width=2.6),
+            hovertemplate="%{x|%Y-%m-%d}<br>SCFI: %{y:,.2f}<extra></extra>",
+        ))
+        fig_ship.add_trace(go.Scatter(
+            x=dff["date"], y=dff["CCFI"], name="CCFI",
+            mode="lines+markers", line=dict(color=GOLD, width=2.4),
+            hovertemplate="%{x|%Y-%m-%d}<br>CCFI: %{y:,.2f}<extra></extra>",
+        ))
+        chart_layout(fig_ship, 360)
+        fig_ship.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_ship, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">🚢</span><span>운임 지수 데이터를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    freight_rows = [
+        freight_compare_row("SCFI", df_freight, "SCFI"),
+        freight_compare_row("CCFI", df_freight, "CCFI"),
+    ]
+    freight_table = build_market_compare_rows(freight_rows)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">운임 지수 비교표</span><span class="p-m">Current vs 1M / 1Y</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+              <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+            </tr>
+          </thead>
+          <tbody>{freight_table}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("출처: 국가물류통합정보센터 국외해상운임지수 엑셀 자료. 전월/전년 값은 기준일 이전 가장 가까운 발표값 기준입니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     cN, cA = st.columns([1, 1], gap="medium")
     with cN:
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">📰 물류·운임 뉴스</span><span class="p-m">Google News RSS</span></div><div class="p-body">', unsafe_allow_html=True)

@@ -151,6 +151,9 @@ st.markdown(f"""
 .dt th:first-child, .dt td:first-child {{ text-align:left; }}
 .dt td {{ padding:8px 10px; border-bottom:1px solid {T['grid']}; font-family:'SF Mono','Consolas',monospace; color:{T['text']}; }}
 .dt tr:hover td {{ background:{T['panel2']}; }}
+.table-scroll {{ max-height:360px; overflow:auto; border:1px solid {T['border']}; border-radius:8px; margin-bottom:12px; }}
+.table-scroll .dt {{ margin:0; }}
+.table-scroll .dt th {{ position:sticky; top:0; background:{T['panel2']}; z-index:1; }}
 .best {{ color:{T['up']}; font-weight:700; }}
 .worst {{ color:{T['down']}; }}
 
@@ -296,6 +299,25 @@ def build_market_compare_rows(rows):
             "</tr>"
         )
     return html_rows
+
+def format_table_value(v):
+    if v is None or pd.isna(v):
+        return "-"
+    if isinstance(v, float):
+        return f"{v:,.2f}"
+    return html.escape(str(v))
+
+def dataframe_to_dark_table(df, columns=None, max_rows=None):
+    view = df.copy()
+    if columns:
+        view = view[columns]
+    if max_rows:
+        view = view.head(max_rows)
+    header = "".join(f"<th>{html.escape(str(c))}</th>" for c in view.columns)
+    body = ""
+    for _, row in view.iterrows():
+        body += "<tr>" + "".join(f"<td>{format_table_value(row[c])}</td>" for c in view.columns) + "</tr>"
+    return f'<div class="table-scroll"><table class="dt"><thead><tr>{header}</tr></thead><tbody>{body}</tbody></table></div>'
 
 def indicator_compare_row(label, df, col, unit="", decimals=1, current_override=None):
     clean = df[(df[col].notna()) & (df[col] > 0)].copy()
@@ -1169,19 +1191,28 @@ elif menu == "🛢 원자재":
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">PVC / DOTP 구매팀 월별 지수</span><span class="p-m">Manual monthly update</span></div><div class="p-body">', unsafe_allow_html=True)
     edit_col, guide_col = st.columns([2, 1], gap="medium")
     with edit_col:
-        edited_purchase = st.data_editor(
-            df_purchase[["월", "PVC", "DOTP"]],
-            hide_index=True,
-            use_container_width=True,
-            num_rows="dynamic",
-            key="purchase_price_editor",
-            column_config={
-                "월": st.column_config.TextColumn("월", help="YYYY-MM 형식으로 입력"),
-                "PVC": st.column_config.NumberColumn("PVC", format="%.2f"),
-                "DOTP": st.column_config.NumberColumn("DOTP", format="%.2f"),
-            },
-        )
-        df_purchase = set_purchase_price_df(edited_purchase)
+        latest_purchase = df_purchase.iloc[-1] if len(df_purchase) else {"월": datetime.now().strftime("%Y-%m"), "PVC": 0, "DOTP": 0}
+        i_month, i_pvc, i_dotp = st.columns([1, 1, 1], gap="small")
+        with i_month:
+            input_month = st.text_input("월", value=str(latest_purchase["월"]), help="YYYY-MM 형식")
+        with i_pvc:
+            input_pvc = st.number_input("PVC", value=float(latest_purchase["PVC"]) if pd.notna(latest_purchase["PVC"]) else 0.0, step=0.01, format="%.2f")
+        with i_dotp:
+            input_dotp = st.number_input("DOTP", value=float(latest_purchase["DOTP"]) if pd.notna(latest_purchase["DOTP"]) else 0.0, step=0.01, format="%.2f")
+        if st.button("월별 지수 반영", use_container_width=True, key="apply_purchase_price"):
+            updated = df_purchase[["월", "PVC", "DOTP"]].copy()
+            row = {
+                "월": input_month[:7],
+                "PVC": input_pvc if input_pvc > 0 else None,
+                "DOTP": input_dotp if input_dotp > 0 else None,
+            }
+            if row["월"] in updated["월"].astype(str).values:
+                updated.loc[updated["월"].astype(str) == row["월"], ["PVC", "DOTP"]] = [row["PVC"], row["DOTP"]]
+            else:
+                updated = pd.concat([updated, pd.DataFrame([row])], ignore_index=True)
+            df_purchase = set_purchase_price_df(updated)
+            st.rerun()
+        st.markdown(dataframe_to_dark_table(df_purchase[["월", "PVC", "DOTP"]], max_rows=18), unsafe_allow_html=True)
     with guide_col:
         if st.button("기본값으로 되돌리기", use_container_width=True, key="reset_purchase_price"):
             st.session_state.purchase_price_rows = PURCHASE_PRICE_DEFAULTS
@@ -1543,11 +1574,12 @@ elif menu == "🎯 Market Insight":
                 st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">{selected_state} Accounts</span><span class="p-m">{len(focused_accounts)} companies</span></div><div class="p-body">', unsafe_allow_html=True)
                 if len(focused_accounts):
                     focused_cols = ["category", "company", "home_base", "sales_2025", "sales_2024"]
-                    st.dataframe(
-                        focused_accounts[focused_cols].sort_values(["category", "sales_2025", "sales_2024"], ascending=[True, False, False], na_position="last"),
-                        use_container_width=True,
-                        hide_index=True,
+                    focused_table = focused_accounts[focused_cols].sort_values(
+                        ["category", "sales_2025", "sales_2024"],
+                        ascending=[True, False, False],
+                        na_position="last",
                     )
+                    st.markdown(dataframe_to_dark_table(focused_table), unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="placeholder"><span style="font-size:26px">🎯</span><span>선택한 주의 거래선이 없습니다</span></div>', unsafe_allow_html=True)
             st.markdown('</div></div>', unsafe_allow_html=True)
@@ -1588,11 +1620,8 @@ elif menu == "🎯 Market Insight":
             "category", "type", "rank_2025", "rank_2024", "rank_2023", "rank_2022",
             "company", "home_base", "state", "sales_2025", "sales_2024", "sales_2023", "sales_2022"
         ]
-        st.dataframe(
-            market_view[display_cols].sort_values(["category", "rank_2025", "rank_2024", "company"], na_position="last"),
-            use_container_width=True,
-            hide_index=True,
-        )
+        account_table = market_view[display_cols].sort_values(["category", "rank_2025", "rank_2024", "company"], na_position="last")
+        st.markdown(dataframe_to_dark_table(account_table), unsafe_allow_html=True)
         excel_download_button(
             "📊 Market Insight 엑셀 다운로드",
             {
@@ -1804,14 +1833,14 @@ elif menu == "💱 FX/Tariff":
         """,
         unsafe_allow_html=True,
     )
-    st.dataframe(tariff_timeline, use_container_width=True, hide_index=True)
+    st.markdown(dataframe_to_dark_table(tariff_timeline), unsafe_allow_html=True)
     c_scenario, c_action = st.columns([1.1, 1], gap="medium")
     with c_scenario:
         st.markdown(f'<div style="font-size:12px;font-weight:700;color:{T["text"]};margin:8px 0">관세 구조 시나리오</div>', unsafe_allow_html=True)
-        st.dataframe(tariff_scenario, use_container_width=True, hide_index=True)
+        st.markdown(dataframe_to_dark_table(tariff_scenario), unsafe_allow_html=True)
     with c_action:
         st.markdown(f'<div style="font-size:12px;font-weight:700;color:{T["text"]};margin:8px 0">당사 대응 방안</div>', unsafe_allow_html=True)
-        st.dataframe(tariff_actions, use_container_width=True, hide_index=True)
+        st.markdown(dataframe_to_dark_table(tariff_actions), unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">📋 LVT 관세 참고 (미국 수입)</span><span class="p-m">실무 참고용</span></div><div class="p-body">', unsafe_allow_html=True)
@@ -1822,7 +1851,7 @@ elif menu == "💱 FX/Tariff":
         {"구분": "MPF", "내용": "0.3464% (Min $33.58/Max $651.50)", "비고": "CO 보완 시 면제 가능"},
         {"구분": "HMF", "내용": "0.125%", "비고": "해상운송 부과"},
     ])
-    st.dataframe(tref, use_container_width=True, hide_index=True)
+    st.markdown(dataframe_to_dark_table(tref), unsafe_allow_html=True)
     st.caption("⚠️ 참고용 · 실제 통관 시 관세사·세관 확인 필요")
     excel_download_button(
         "📊 FX/Tariff 데이터 엑셀 다운로드",

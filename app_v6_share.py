@@ -427,6 +427,21 @@ def get_market_insight_df():
     df["state"] = df["state"].astype(str).str.upper()
     return df
 
+STATE_CENTERS = {
+    "AL": (32.8067, -86.7911), "AZ": (33.7298, -111.4312), "CA": (36.1162, -119.6816),
+    "CO": (39.0598, -105.3111), "FL": (27.7663, -81.6868), "GA": (33.0406, -83.6431),
+    "ID": (44.2405, -114.4788), "IL": (40.3495, -88.9861), "IN": (39.8494, -86.2583),
+    "KS": (38.5266, -96.7265), "LA": (31.1695, -91.8678), "MA": (42.2302, -71.5301),
+    "MD": (39.0639, -76.8021), "ME": (44.6939, -69.3819), "MI": (43.3266, -84.5361),
+    "MN": (45.6945, -93.9002), "MO": (38.4561, -92.2884), "MS": (32.7416, -89.6787),
+    "MT": (46.9219, -110.4544), "NC": (35.6301, -79.8064), "NE": (41.1254, -98.2681),
+    "NJ": (40.2989, -74.5210), "NM": (34.8405, -106.2485), "NV": (38.3135, -117.0554),
+    "NY": (42.1657, -74.9481), "OH": (40.3888, -82.7649), "OK": (35.5653, -96.9289),
+    "OR": (44.5720, -122.0709), "PA": (40.5908, -77.2098), "SC": (33.8569, -80.9450),
+    "TN": (35.7478, -86.6923), "TX": (31.0545, -97.5635), "UT": (40.1500, -111.8624),
+    "VA": (37.7693, -78.1700), "WA": (47.4009, -121.4905), "WI": (44.2685, -89.6165),
+}
+
 def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
                          v_fedfunds, usd_krw, v_wti, d_wti):
     demand = (
@@ -1361,10 +1376,19 @@ elif menu == "🎯 Market Insight":
         state_summary["company_list"] = state_summary["state"].map(
             market_view.groupby("state")["company"].apply(lambda s: ", ".join(s.head(8))).to_dict()
         )
+        state_summary["lat"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[0])
+        state_summary["lon"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[1])
+        active_state_options = state_summary["state"].dropna().sort_values().tolist()
 
         map_col, bar_col = st.columns([2, 1], gap="medium")
         with map_col:
             st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US Channel Footprint</span><span class="p-m">Company count by state</span></div><div class="p-body">', unsafe_allow_html=True)
+            selected_state = st.selectbox(
+                "State Focus",
+                ["All States"] + active_state_options,
+                key="market_state_focus",
+            )
+            labels_df = state_summary.dropna(subset=["lat", "lon"]).copy()
             fig_map = go.Figure(data=go.Choropleth(
                 locations=state_summary["state"],
                 z=state_summary["companies"],
@@ -1381,25 +1405,77 @@ elif menu == "🎯 Market Insight":
                     "%{customdata[2]}<extra></extra>"
                 ),
             ))
-            fig_map.update_geos(scope="usa", bgcolor="rgba(0,0,0,0)", lakecolor="rgba(0,0,0,0)", landcolor=T["panel2"])
+            fig_map.add_trace(go.Scattergeo(
+                lon=labels_df["lon"],
+                lat=labels_df["lat"],
+                text=labels_df["state"],
+                mode="text",
+                textfont=dict(color="#FFFFFF", size=fs(10), family="Arial Black"),
+                hoverinfo="skip",
+                showlegend=False,
+            ))
+            if selected_state != "All States":
+                selected_row = state_summary[state_summary["state"] == selected_state]
+                if len(selected_row):
+                    fig_map.add_trace(go.Choropleth(
+                        locations=selected_row["state"],
+                        z=selected_row["companies"],
+                        locationmode="USA-states",
+                        colorscale=[[0, "#E8B339"], [1, "#E8B339"]],
+                        showscale=False,
+                        marker_line_color="#FFFFFF",
+                        marker_line_width=2.5,
+                        hovertemplate=(
+                            "<b>%{location}</b><br>"
+                            "Focused state<br>"
+                            "Companies: %{z}<extra></extra>"
+                        ),
+                    ))
+                    lat = float(selected_row["lat"].iloc[0])
+                    lon = float(selected_row["lon"].iloc[0])
+                    fig_map.update_geos(
+                        scope="usa",
+                        center=dict(lat=lat, lon=lon),
+                        projection_scale=4.2,
+                        bgcolor="rgba(0,0,0,0)",
+                        lakecolor="rgba(0,0,0,0)",
+                        landcolor=T["panel2"],
+                    )
+                else:
+                    fig_map.update_geos(scope="usa", bgcolor="rgba(0,0,0,0)", lakecolor="rgba(0,0,0,0)", landcolor=T["panel2"])
+            else:
+                fig_map.update_geos(scope="usa", bgcolor="rgba(0,0,0,0)", lakecolor="rgba(0,0,0,0)", landcolor=T["panel2"])
             chart_layout(fig_map, 390)
             fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_map, use_container_width=True, config=CHART_CONFIG)
             st.markdown('</div></div>', unsafe_allow_html=True)
 
         with bar_col:
-            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Top States</span><span class="p-m">Concentration</span></div><div class="p-body">', unsafe_allow_html=True)
-            top_states = state_summary.head(10).sort_values("companies")
-            fig_state = go.Figure(go.Bar(
-                x=top_states["companies"],
-                y=top_states["state"],
-                orientation="h",
-                marker_color=T["accent"],
-                hovertemplate="%{y}<br>Companies: %{x}<extra></extra>",
-            ))
-            chart_layout(fig_state, 390)
-            fig_state.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
-            st.plotly_chart(fig_state, use_container_width=True, config=CHART_CONFIG)
+            if selected_state == "All States":
+                st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Top States</span><span class="p-m">Concentration</span></div><div class="p-body">', unsafe_allow_html=True)
+                top_states = state_summary.head(10).sort_values("companies")
+                fig_state = go.Figure(go.Bar(
+                    x=top_states["companies"],
+                    y=top_states["state"],
+                    orientation="h",
+                    marker_color=T["accent"],
+                    hovertemplate="%{y}<br>Companies: %{x}<extra></extra>",
+                ))
+                chart_layout(fig_state, 390)
+                fig_state.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
+                st.plotly_chart(fig_state, use_container_width=True, config=CHART_CONFIG)
+            else:
+                focused_accounts = market_view[market_view["state"] == selected_state].copy()
+                st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">{selected_state} Accounts</span><span class="p-m">{len(focused_accounts)} companies</span></div><div class="p-body">', unsafe_allow_html=True)
+                if len(focused_accounts):
+                    focused_cols = ["category", "company", "home_base", "sales_2025", "sales_2024"]
+                    st.dataframe(
+                        focused_accounts[focused_cols].sort_values(["category", "sales_2025", "sales_2024"], ascending=[True, False, False], na_position="last"),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.markdown('<div class="placeholder"><span style="font-size:26px">🎯</span><span>선택한 주의 거래선이 없습니다</span></div>', unsafe_allow_html=True)
             st.markdown('</div></div>', unsafe_allow_html=True)
 
         mix_col, sales_col = st.columns([1, 1], gap="medium")

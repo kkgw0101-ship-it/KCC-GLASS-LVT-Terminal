@@ -171,6 +171,21 @@ st.markdown(f"""
 .tag-h {{ background:color-mix(in srgb,{T['down']} 15%,transparent); color:{T['down']}; }}
 .tag-w {{ background:color-mix(in srgb,{GOLD} 18%,transparent); color:{GOLD}; }}
 .tag-p {{ background:color-mix(in srgb,{T['up']} 15%,transparent); color:{T['up']}; }}
+.fcw-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+.fcw-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; min-height:330px; display:flex; flex-direction:column; transition:transform .15s ease, border-color .15s ease; }}
+.fcw-card:hover {{ transform:translateY(-2px); border-color:{T['accent']}; }}
+.fcw-card.featured {{ display:grid; grid-template-columns:1.05fr 1.35fr; min-height:260px; margin-bottom:14px; }}
+.fcw-media {{ height:150px; background:{T['grid']}; overflow:hidden; }}
+.fcw-card.featured .fcw-media {{ height:100%; min-height:260px; }}
+.fcw-media img {{ width:100%; height:100%; object-fit:cover; display:block; }}
+.fcw-fallback {{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,{NAVY},#24304A 56%,{GOLD}); color:white; font-size:12px; font-weight:800; letter-spacing:1px; }}
+.fcw-body {{ padding:14px; display:flex; flex-direction:column; gap:8px; flex:1; }}
+.fcw-meta {{ color:{T['text3']}; font-size:11px; font-family:'SF Mono','Consolas',monospace; line-height:1.4; }}
+.fcw-title {{ color:{T['text']}; font-size:17px; line-height:1.32; font-weight:800; text-decoration:none; letter-spacing:0; }}
+.fcw-title:hover {{ color:{T['accent']}; }}
+.fcw-card.featured .fcw-title {{ font-size:22px; line-height:1.25; }}
+.fcw-summary {{ color:{T['text2']}; font-size:13px; line-height:1.62; }}
+.fcw-read {{ margin-top:auto; color:{T['accent']}; font-size:12px; font-weight:800; text-decoration:none; }}
 
 /* 시뮬레이터 결과 카드 */
 .sim-result {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:16px; text-align:center; }}
@@ -1907,26 +1922,41 @@ elif menu == "📰 FCW News":
     )
     fcw_items = llm.fetch_fcw_news(fcw_category, limit=14)
 
+    def fcw_card(item, featured=False):
+        title = html.escape(item.get("title", ""))
+        link = html.escape(item.get("link", ""))
+        published = html.escape(item.get("published", "") or "Latest")
+        summary = html.escape(item.get("summary", ""))
+        image = html.escape(item.get("image", "") or "")
+        tag = html.escape(item.get("category", fcw_category))
+        media = (
+            f'<img src="{image}" alt="{title}" loading="lazy"/>'
+            if image else
+            f'<div class="fcw-fallback"><span>{tag}</span></div>'
+        )
+        summary_html = f'<div class="fcw-summary">{summary}</div>' if summary else ""
+        klass = "fcw-card featured" if featured else "fcw-card"
+        return f"""
+        <article class="{klass}">
+          <a class="fcw-media" href="{link}" target="_blank" rel="noopener noreferrer">{media}</a>
+          <div class="fcw-body">
+            <div class="fcw-meta">{published} · Floor Covering Weekly</div>
+            <a class="fcw-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>
+            {summary_html}
+            <a class="fcw-read" href="{link}" target="_blank" rel="noopener noreferrer">Read More →</a>
+          </div>
+        </article>
+        """
+
     left, right = st.columns([2, 1], gap="medium")
     with left:
-        st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Latest Articles</span><span class="p-m">{fcw_category}</span></div><div class="p-body">', unsafe_allow_html=True)
-        for item in fcw_items:
-            title = html.escape(item.get("title", ""))
-            link = html.escape(item.get("link", ""))
-            published = html.escape(item.get("published", ""))
-            summary = html.escape(item.get("summary", ""))
-            date_html = f"<span>{published}</span>" if published else "<span>Latest</span>"
-            summary_html = f"<div style='font-size:11px;color:{T['text2']};line-height:1.55;margin-top:4px'>{summary}</div>" if summary else ""
-            st.markdown(
-                f"""
-                <div class="news">
-                  <a href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>
-                  <div class="news-t">{date_html} · Floor Covering Weekly</div>
-                  {summary_html}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Featured Articles</span><span class="p-m">{fcw_category}</span></div><div class="p-body">', unsafe_allow_html=True)
+        if fcw_items:
+            st.markdown(fcw_card(fcw_items[0], featured=True), unsafe_allow_html=True)
+            cards = "".join(fcw_card(item) for item in fcw_items[1:9])
+            st.markdown(f'<div class="fcw-grid">{cards}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="placeholder"><span style="font-size:26px">📰</span><span>FCW 기사를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with right:
@@ -1942,6 +1972,17 @@ elif menu == "📰 FCW News":
             """,
             unsafe_allow_html=True,
         )
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Reading Queue</span><span class="p-m">Quick scan</span></div><div class="p-body">', unsafe_allow_html=True)
+        for item in fcw_items[:6]:
+            title = html.escape(item.get("title", ""))
+            link = html.escape(item.get("link", ""))
+            published = html.escape(item.get("published", "") or "Latest")
+            st.markdown(
+                f'<div class="news"><a href="{link}" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:800">{title}</a><div class="news-t">{published}</div></div>',
+                unsafe_allow_html=True,
+            )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     fcw_export = pd.DataFrame(fcw_items)

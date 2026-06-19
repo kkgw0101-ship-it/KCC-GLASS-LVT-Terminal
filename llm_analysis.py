@@ -74,9 +74,26 @@ def fetch_fcw_news(category="All Latest", limit=12):
         "Features", "News", "Products", "Business Builder", "Retail", "Sustainability",
         "Technology", "Style & Design", "Research + Data", "Awards Programs", "Advertising",
         "Archive", "Read More", "View All", "Subscribe", "Contact Us", "About Us",
+        "Content Categories", "Media Kit", "Classifieds", "Latest", "Floor Covering Weekly",
     }
     items = []
     seen = set()
+
+    def pick_image(container):
+        if not container:
+            return ""
+        img = container.find("img")
+        if not img:
+            return ""
+        for attr in ["data-src", "data-original", "data-lazy-src", "src"]:
+            src = img.get(attr)
+            if src and not src.startswith("data:"):
+                return urljoin(url, src)
+        srcset = img.get("srcset", "")
+        if srcset:
+            first = srcset.split(",")[0].strip().split(" ")[0]
+            return urljoin(url, first)
+        return ""
 
     for a in soup.find_all("a", href=True):
         title = a.get_text(" ", strip=True)
@@ -99,12 +116,16 @@ def fetch_fcw_news(category="All Latest", limit=12):
             summary = summary.replace(published, "", 1).strip()
         summary = re.sub(r"\s+", " ", summary)
         summary = summary.replace("Read More", "").strip(" -|")
+        if summary in skip_titles:
+            summary = ""
 
         items.append({
             "title": title,
             "link": link,
             "published": published,
             "summary": summary[:220],
+            "image": pick_image(container),
+            "category": category,
             "source": "Floor Covering Weekly",
         })
         seen.add(link)

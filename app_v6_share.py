@@ -142,6 +142,8 @@ st.markdown(f"""
 [data-testid="stSidebar"] * {{ color:#FFFFFF !important; }}
 .sb-brand {{ font-size:13px; font-weight:800; letter-spacing:1.5px; color:#fff !important; padding:6px 0 2px 0; }}
 .sb-sub {{ font-size:10px; color:#9FB0D9 !important; padding-bottom:14px; border-bottom:1px solid #1E3A8A; margin-bottom:12px; }}
+.sb-nav-label {{ color:#9FB0D9 !important; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin:12px 0 6px 0; }}
+.sb-subnav {{ color:#9FB0D9 !important; font-size:10px; line-height:1.45; margin:2px 0 8px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
 
@@ -1803,16 +1805,57 @@ def build_home_insight(summary, alerts, d_fx, d_scfi, d_pvc, d_dotp):
 # ════════════════════════════════════════════════════════════
 # 사이드바
 # ════════════════════════════════════════════════════════════
+MENU_GROUPS = {
+    "🏠 Home": ["🏠 Home"],
+    "📊 Overview": ["📊 Overview"],
+    "💼 Sales Intelligence": ["🎯 Market Insight", "🏭 Competitor Export", "💱 FX/Tariff"],
+    "🚢 Cost & Logistics": ["🛢 원자재", "🚢 Freight"],
+    "🎨 Design & News": ["🎨 Design Intelligence", "📰 FCW News"],
+    "🏡 Macro / Housing": ["🏡 Housing", "📈 Macro"],
+}
+PAGE_TO_GROUP = {
+    page: group
+    for group, pages in MENU_GROUPS.items()
+    for page in pages
+}
+
 def go_to_menu(target):
+    st.session_state.main_menu_group = PAGE_TO_GROUP.get(target, "🏠 Home")
     st.session_state.main_menu = target
 
 with st.sidebar:
     st.markdown('<div class="sb-brand">LVT INTELLIGENCE</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
-    menu = st.radio("", [
-        "🏠 Home", "📊 Overview", "🛢 원자재", "🚢 Freight",
-        "🎯 Market Insight", "🏭 Competitor Export", "🎨 Design Intelligence", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
-    ], label_visibility="collapsed", key="main_menu")
+    if "main_menu_group" not in st.session_state:
+        st.session_state.main_menu_group = "🏠 Home"
+    if st.session_state.main_menu_group not in MENU_GROUPS:
+        st.session_state.main_menu_group = "🏠 Home"
+
+    st.markdown('<div class="sb-nav-label">Workspace</div>', unsafe_allow_html=True)
+    selected_group = st.radio(
+        "",
+        list(MENU_GROUPS.keys()),
+        label_visibility="collapsed",
+        key="main_menu_group",
+    )
+    group_pages = MENU_GROUPS[selected_group]
+    if "main_menu" not in st.session_state or st.session_state.main_menu not in group_pages:
+        st.session_state.main_menu = group_pages[0]
+    if len(group_pages) > 1:
+        st.markdown('<div class="sb-nav-label">Section</div>', unsafe_allow_html=True)
+        menu = st.radio(
+            "",
+            group_pages,
+            label_visibility="collapsed",
+            key="main_menu",
+        )
+        st.markdown(
+            f'<div class="sb-subnav">{selected_group.replace("💼 ","").replace("🚢 ","").replace("🎨 ","").replace("🏡 ","")} 안에서 필요한 세부 화면을 선택합니다.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        menu = group_pages[0]
+        st.session_state.main_menu = menu
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
     # 테마 토글

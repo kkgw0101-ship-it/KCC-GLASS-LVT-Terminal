@@ -43,6 +43,7 @@ def get_secret(name, default=""):
 
 api_key = get_secret("FRED_API_KEY", "여기에_본인_API_KEY_입력")
 anthropic_key = get_secret("ANTHROPIC_API_KEY", "")
+google_places_key = get_secret("GOOGLE_PLACES_API_KEY", "")
 
 # ── 로고 로드 ─────────────────────────────────────────────────
 def _logo(path):
@@ -976,6 +977,19 @@ CANADA_PROVINCE_CENTERS = {
 REGION_CENTERS = {**STATE_CENTERS, **CANADA_PROVINCE_CENTERS}
 US_STATE_CODES = set(STATE_CENTERS.keys())
 CA_PROVINCE_CODES = set(CANADA_PROVINCE_CENTERS.keys())
+REGION_NAMES = {
+    "AL": "Alabama", "AZ": "Arizona", "CA": "California", "CO": "Colorado", "FL": "Florida",
+    "GA": "Georgia", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "KS": "Kansas",
+    "LA": "Louisiana", "MA": "Massachusetts", "MD": "Maryland", "ME": "Maine", "MI": "Michigan",
+    "MN": "Minnesota", "MO": "Missouri", "MS": "Mississippi", "MT": "Montana", "NC": "North Carolina",
+    "NE": "Nebraska", "NJ": "New Jersey", "NM": "New Mexico", "NV": "Nevada", "NY": "New York",
+    "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "SC": "South Carolina",
+    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VA": "Virginia", "WA": "Washington",
+    "WI": "Wisconsin", "AB": "Alberta", "BC": "British Columbia", "MB": "Manitoba",
+    "NB": "New Brunswick", "NL": "Newfoundland and Labrador", "NS": "Nova Scotia",
+    "NT": "Northwest Territories", "NU": "Nunavut", "ON": "Ontario", "PE": "Prince Edward Island",
+    "QC": "Quebec", "SK": "Saskatchewan", "YT": "Yukon",
+}
 
 def infer_region_from_text(value):
     text = str(value or "").upper()
@@ -1054,6 +1068,87 @@ def get_uploaded_account_df():
         df[col] = pd.to_numeric(df.get(col), errors="coerce")
     return df
 
+def get_google_places_account_df():
+    rows = st.session_state.get("google_places_rows", [])
+    if not rows:
+        return pd.DataFrame(columns=["source", "company", "category", "type", "country", "state", "city", "home_base", "website", "notes", "sales", "priority", "lat", "lon"])
+    df = pd.DataFrame(rows)
+    for col in ["lat", "lon", "sales"]:
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    return df
+
+def google_places_text_search(api_key_value, text_query, category_label, max_results=10, include_contact_fields=False):
+    if not api_key_value:
+        raise ValueError("GOOGLE_PLACES_API_KEY가 설정되어 있지 않습니다.")
+    endpoint = "https://places.googleapis.com/v1/places:searchText"
+    fields = [
+        "places.id",
+        "places.displayName",
+        "places.formattedAddress",
+        "places.location",
+        "places.primaryType",
+        "places.googleMapsUri",
+        "places.businessStatus",
+    ]
+    if include_contact_fields:
+        fields.extend([
+            "places.websiteUri",
+            "places.nationalPhoneNumber",
+            "places.rating",
+            "places.userRatingCount",
+        ])
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key_value,
+        "X-Goog-FieldMask": ",".join(fields),
+    }
+    payload = {
+        "textQuery": text_query,
+        "languageCode": "en",
+        "maxResultCount": int(max(1, min(max_results, 20))),
+    }
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=20)
+    if response.status_code >= 400:
+        detail = response.text[:500]
+        raise ValueError(f"Google Places 요청 실패 ({response.status_code}): {detail}")
+    places = response.json().get("places", [])
+    rows = []
+    for place in places:
+        display = place.get("displayName", {}) or {}
+        location = place.get("location", {}) or {}
+        address = place.get("formattedAddress", "") or ""
+        region = infer_region_from_text(address)
+        country = infer_country_from_region(region)
+        if country == "Unknown":
+            if "canada" in address.lower():
+                country = "Canada"
+            elif "usa" in address.lower() or "united states" in address.lower():
+                country = "United States"
+        contact_notes = []
+        if place.get("businessStatus"):
+            contact_notes.append(place.get("businessStatus"))
+        if include_contact_fields and place.get("nationalPhoneNumber"):
+            contact_notes.append(place.get("nationalPhoneNumber"))
+        if include_contact_fields and place.get("rating"):
+            contact_notes.append(f'Rating {place.get("rating")} ({place.get("userRatingCount", 0):,})')
+        rows.append({
+            "source": "Google Places",
+            "company": display.get("text", "Unknown"),
+            "category": category_label or "Google Places Lead",
+            "type": place.get("primaryType", "Place"),
+            "country": country,
+            "state": region,
+            "city": "",
+            "home_base": address,
+            "website": place.get("websiteUri") or place.get("googleMapsUri", ""),
+            "notes": " · ".join(contact_notes) if contact_notes else "Google Places search result",
+            "sales": 0.0,
+            "priority": "Lead",
+            "lat": location.get("latitude"),
+            "lon": location.get("longitude"),
+        })
+    return pd.DataFrame(rows)
+
 def build_account_map_df(market_df, competitor_detail_df=None):
     frames = []
     if market_df is not None and not market_df.empty:
@@ -1109,6 +1204,9 @@ def build_account_map_df(market_df, competitor_detail_df=None):
     uploaded = get_uploaded_account_df()
     if not uploaded.empty:
         frames.append(uploaded)
+    google_places = get_google_places_account_df()
+    if not google_places.empty:
+        frames.append(google_places)
     if not frames:
         return pd.DataFrame(columns=["source", "company", "category", "type", "country", "state", "city", "home_base", "website", "notes", "sales", "priority", "lat", "lon"])
 
@@ -3316,6 +3414,77 @@ elif menu == "🗺 Account Map":
         unsafe_allow_html=True,
     )
 
+    with st.expander("Google Places Lead Finder — 구글맵 기반 후보 업체 자동 발굴", expanded=False):
+        key_status = "연결 준비 완료" if google_places_key else "GOOGLE_PLACES_API_KEY 필요"
+        st.caption(f"상태: {key_status}. 검색 결과는 현재 세션에만 추가됩니다. 기본 필드는 업체명, 주소, 좌표, 구글맵 링크 중심으로 제한했습니다.")
+        gp1, gp2, gp3, gp4 = st.columns([1.15, 1, 1, 0.8], gap="small")
+        with gp1:
+            keyword_choice = st.selectbox(
+                "검색 키워드",
+                [
+                    "flooring distributor",
+                    "flooring retailer",
+                    "floor covering store",
+                    "vinyl flooring distributor",
+                    "LVT flooring",
+                    "commercial flooring contractor",
+                    "custom",
+                ],
+                key="places_keyword_choice",
+            )
+            if keyword_choice == "custom":
+                keyword = st.text_input("Custom keyword", value="LVT flooring distributor", key="places_keyword_custom")
+            else:
+                keyword = keyword_choice
+        with gp2:
+            place_country = st.selectbox("국가", ["United States", "Canada"], key="places_country")
+            region_pool = US_STATE_CODES if place_country == "United States" else CA_PROVINCE_CODES
+            region_choice = st.selectbox(
+                "State / Province",
+                ["전체"] + sorted(region_pool),
+                format_func=lambda x: "전체" if x == "전체" else f"{x} · {REGION_NAMES.get(x, x)}",
+                key="places_region",
+            )
+        with gp3:
+            city_query = st.text_input("도시 optional", placeholder="예: Dallas, Toronto", key="places_city")
+            max_results = st.slider("최대 결과", 5, 20, 10, 5, key="places_max_results")
+        with gp4:
+            include_contact = st.checkbox("전화/웹/평점 포함", value=False, key="places_include_contact")
+            st.caption("선택 시 Google 과금 필드가 늘 수 있습니다.")
+
+        location_query = place_country
+        if region_choice != "전체":
+            location_query = f"{REGION_NAMES.get(region_choice, region_choice)} {place_country}"
+        if city_query.strip():
+            location_query = f"{city_query.strip()} {location_query}"
+        text_query = f"{keyword} in {location_query}"
+        st.markdown(f'<span class="account-chip">Query · {html.escape(text_query)}</span>', unsafe_allow_html=True)
+        gpb1, gpb2 = st.columns([1, 1], gap="small")
+        with gpb1:
+            if st.button("Google Places에서 후보 불러오기", use_container_width=True, key="places_search_btn"):
+                if not google_places_key:
+                    st.error("Streamlit Secrets에 GOOGLE_PLACES_API_KEY를 먼저 넣어주세요.")
+                else:
+                    try:
+                        places_df = google_places_text_search(
+                            google_places_key,
+                            text_query,
+                            "Google Places Lead",
+                            max_results=max_results,
+                            include_contact_fields=include_contact,
+                        )
+                        existing = get_google_places_account_df()
+                        merged = pd.concat([existing, places_df], ignore_index=True)
+                        merged = merged.drop_duplicates(subset=["company", "home_base"], keep="first")
+                        st.session_state.google_places_rows = merged.to_dict("records")
+                        st.success(f"검색 완료: 신규/기존 포함 {len(merged):,}개 Google Places 후보가 현재 지도에 반영되었습니다.")
+                    except Exception as e:
+                        st.error(f"Google Places 검색 실패: {e}")
+        with gpb2:
+            if st.session_state.get("google_places_rows") and st.button("Google Places 후보 초기화", use_container_width=True, key="places_reset_btn"):
+                st.session_state.google_places_rows = []
+                st.rerun()
+
     with st.expander("Account Excel Upload Center — 거래선 후보 리스트 추가", expanded=False):
         st.caption("권장 컬럼: company, category, country, state/province, city, home_base/address, website, notes, lat, lon. 위도/경도가 없으면 주/Province 중심에 자동 배치합니다.")
         account_upload = st.file_uploader("거래선 엑셀 업로드", type=["xlsx", "xls"], key="account_map_upload")
@@ -3386,12 +3555,13 @@ elif menu == "🗺 Account Map":
         market_accounts = int((filtered["source"] == "Market Insight").sum())
         upload_accounts = int((filtered["source"] == "Uploaded Excel").sum())
         importyeti_accounts = int((filtered["source"] == "ImportYeti Upload").sum())
+        google_accounts = int((filtered["source"] == "Google Places").sum())
         st.markdown(f"""
         <div class="account-source-grid">
           <div class="account-source"><div class="account-k">Visible Accounts</div><div class="account-v">{total_accounts:,.0f}</div><div class="account-c">현재 검색/필터 기준</div></div>
           <div class="account-source"><div class="account-k">Regions</div><div class="account-v">{mapped_regions:,.0f}</div><div class="account-c">State / Province coverage</div></div>
           <div class="account-source"><div class="account-k">Core List</div><div class="account-v">{market_accounts:,.0f}</div><div class="account-c">Market Insight 기반 거래선</div></div>
-          <div class="account-source"><div class="account-k">Session Leads</div><div class="account-v">{upload_accounts + importyeti_accounts:,.0f}</div><div class="account-c">엑셀/ImportYeti 업로드 후보</div></div>
+          <div class="account-source"><div class="account-k">Session Leads</div><div class="account-v">{upload_accounts + importyeti_accounts + google_accounts:,.0f}</div><div class="account-c">엑셀/ImportYeti/Google 후보</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -3406,6 +3576,7 @@ elif menu == "🗺 Account Map":
                     "Top Retailers": GOLD,
                     "Rising Stars": T["up"],
                     "ImportYeti Lead": T["down"],
+                    "Google Places Lead": "#A78BFA",
                     "Uploaded Lead": "#A78BFA",
                 }
                 fig_accounts = go.Figure()

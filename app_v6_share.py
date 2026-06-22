@@ -15,6 +15,7 @@ import os
 import base64
 import html
 import json
+import re
 
 # .env 파일에서 API 키 자동 로드 (있으면 — 매번 set 안 해도 됨)
 try:
@@ -1136,6 +1137,114 @@ def create_pdf_report(metrics, summary, ai_briefing=""):
     buffer.seek(0)
     return buffer
 
+def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_rows,
+                              raw_rows, keyword_df, implication_df, comment_df=None):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    buffer = BytesIO()
+    pdfmetrics.registerFont(UnicodeCIDFont("HYGothic-Medium"))
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=13*mm, leftMargin=13*mm,
+        topMargin=12*mm, bottomMargin=12*mm
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("MTitle", parent=styles["Title"], fontName="HYGothic-Medium", fontSize=18, leading=23, textColor=colors.HexColor("#0E2372"), spaceAfter=5)
+    sub = ParagraphStyle("MSub", parent=styles["Normal"], fontName="HYGothic-Medium", fontSize=8.5, leading=12, textColor=colors.HexColor("#5A6677"), spaceAfter=8)
+    head = ParagraphStyle("MHead", parent=styles["Heading2"], fontName="HYGothic-Medium", fontSize=12, leading=15, textColor=colors.HexColor("#0F1722"), spaceBefore=6, spaceAfter=5)
+    body = ParagraphStyle("MBody", parent=styles["BodyText"], fontName="HYGothic-Medium", fontSize=9, leading=13, textColor=colors.HexColor("#202A38"))
+    small = ParagraphStyle("MSmall", parent=body, fontSize=8.1, leading=11.5, textColor=colors.HexColor("#3E4A5A"))
+
+    def make_table(data, widths):
+        t = Table(data, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "HYGothic-Medium"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0E2372")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, 0), 8.2),
+            ("FONTSIZE", (0, 1), (-1, -1), 7.8),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D9E0EA")),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F7F9FC")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return t
+
+    def plain_text(value):
+        return re.sub("<.*?>", "", str(value))
+
+    def pdf_text(value):
+        return html.escape(plain_text(value))
+
+    story = [
+        Paragraph("KCC Glass LVT Monthly Intelligence Report", title),
+        Paragraph(f"Monthly report | {datetime.now().strftime('%Y-%m-%d %H:%M')} 기준 | Overview · Freight · Raw Materials · Design Trend", sub),
+        Paragraph("1. Executive Summary", head),
+        Paragraph(pdf_text(summary["headline"]), body),
+        Spacer(1, 5),
+    ]
+
+    metric_table = [["지표", "현재값", "변화/비고"]] + metrics
+    story.extend([
+        make_table(metric_table, [43*mm, 42*mm, 87*mm]),
+        Spacer(1, 6),
+        Paragraph("2. Risk Signals", head),
+    ])
+    if alerts:
+        for a in alerts[:5]:
+            story.append(Paragraph(pdf_text(f"- {a['title']} {a['value']}: {a['message']}"), small))
+    else:
+        story.append(Paragraph("- 주요 임계값 초과 항목은 없습니다.", small))
+
+    story.extend([Spacer(1, 5), Paragraph("3. Recommended Actions", head)])
+    action_data = [["영역", "권고 액션"]] + action_recs[["영역", "권고 액션"]].astype(str).values.tolist()
+    story.append(make_table(action_data, [30*mm, 142*mm]))
+
+    story.extend([PageBreak(), Paragraph("4. Freight &amp; Raw Materials", head)])
+    freight_data = [["지표", "단위", "기준일", "현재", "전월대비", "전년대비"]]
+    for r in freight_rows:
+        freight_data.append([r["label"], r["unit"], r["date"], r["current"], plain_text(r["mom"]), plain_text(r["yoy"])])
+    story.extend([Paragraph("Freight Index", small), make_table(freight_data, [28*mm, 24*mm, 31*mm, 29*mm, 30*mm, 30*mm]), Spacer(1, 7)])
+
+    raw_data = [["지표", "단위", "기준월/일", "현재", "전월대비", "전년대비"]]
+    for r in raw_rows:
+        raw_data.append([r["label"], r["unit"], r["date"], r["current"], plain_text(r["mom"]), plain_text(r["yoy"])])
+    story.extend([Paragraph("Raw Materials / FX", small), make_table(raw_data, [28*mm, 27*mm, 31*mm, 29*mm, 28*mm, 29*mm])])
+
+    story.extend([
+        Spacer(1, 7),
+        Paragraph("Management Note", head),
+        Paragraph(pdf_text(f"- 원자재: {summary['cost']}"), small),
+        Paragraph(pdf_text(f"- 환율: {summary['fx']}"), small),
+    ])
+
+    story.extend([PageBreak(), Paragraph("5. Design Trend Intelligence", head)])
+    kw_data = [["Keyword", "Mentions"]] + keyword_df.head(8).astype(str).values.tolist()
+    story.extend([Paragraph("Trend Keyword Radar", small), make_table(kw_data, [90*mm, 35*mm]), Spacer(1, 7)])
+    imp_data = [["Trend", "Signal", "Product Implication"]]
+    for _, r in implication_df.head(8).iterrows():
+        imp_data.append([str(r["Trend"]), str(r["Signal"]), str(r["Product Implication"])])
+    story.extend([Paragraph("Product Implication", small), make_table(imp_data, [36*mm, 20*mm, 116*mm])])
+
+    if comment_df is not None and not comment_df.empty:
+        story.extend([Spacer(1, 7), Paragraph("6. Monthly Comment Log", head)])
+        cdf = comment_df.head(6).astype(str)
+        comment_data = [["월", "카테고리", "코멘트", "작성/수정"]] + cdf[["월", "카테고리", "코멘트", "작성/수정"]].values.tolist()
+        story.append(make_table(comment_data, [22*mm, 28*mm, 88*mm, 34*mm]))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 def clean_export_df(df):
     export = df.copy()
     for col in export.columns:
@@ -1771,6 +1880,38 @@ if menu == "📊 Overview":
             "📄 1페이지 PDF 보고서 다운로드",
             data=pdf_buffer,
             file_name=f"kcc_lvt_market_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+        monthly_freight_rows = [
+            freight_compare_row("SCFI", df_freight, "SCFI"),
+            freight_compare_row("CCFI", df_freight, "CCFI"),
+        ]
+        monthly_raw_rows = [
+            purchase_compare_row("PVC", df_purchase, "PVC"),
+            purchase_compare_row("DOTP", df_purchase, "DOTP"),
+            indicator_compare_row("WTI", df_wti, "WTI", "$/bbl", 1),
+            indicator_compare_row("Brent", df_brent, "Brent", "$/bbl", 1),
+            indicator_compare_row("USD/KRW", df_fx, "USD/KRW", "KRW/USD", 0, current_override=usd_krw),
+        ]
+        monthly_design_items = collect_design_articles(limit=18, source_mode="FCW + FCNews")
+        monthly_keyword_df = extract_design_keywords(monthly_design_items)
+        monthly_implication_df = build_product_implications(monthly_keyword_df)
+        monthly_pdf_buffer = create_monthly_pdf_report(
+            report_metrics,
+            market_summary,
+            action_recs,
+            alerts,
+            monthly_freight_rows,
+            monthly_raw_rows,
+            monthly_keyword_df,
+            monthly_implication_df,
+            get_comment_log_df(),
+        )
+        st.download_button(
+            "📘 월간 종합 PDF 보고서 다운로드",
+            data=monthly_pdf_buffer,
+            file_name=f"kcc_lvt_monthly_intelligence_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True,
         )

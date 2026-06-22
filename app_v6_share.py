@@ -239,6 +239,33 @@ st.markdown(f"""
 .watch-k {{ color:{T['text3']}; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; }}
 .watch-v {{ color:{T['text']}; font-size:19px; font-family:'SF Mono','Consolas',monospace; font-weight:800; line-height:1.1; }}
 .watch-c {{ color:{T['text2']}; font-size:11px; margin-top:6px; }}
+.home-hero {{ position:relative; min-height:520px; border-radius:14px; overflow:hidden; margin-bottom:16px;
+  background-image:linear-gradient(90deg,rgba(7,11,18,.92) 0%,rgba(7,11,18,.66) 43%,rgba(7,11,18,.20) 100%),
+  url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1900&q=80');
+  background-size:cover; background-position:center; border:1px solid {T['border']}; box-shadow:0 24px 80px rgba(0,0,0,.25); }}
+.home-hero::after {{ content:""; position:absolute; inset:-35%; background:linear-gradient(115deg,transparent 0%,rgba(255,255,255,.12) 47%,transparent 54%);
+  transform:translateX(-36%); animation:homeSweep 8s ease-in-out infinite; pointer-events:none; }}
+@keyframes homeSweep {{ 0%,34%{{transform:translateX(-42%)}} 62%{{transform:translateX(42%)}} 100%{{transform:translateX(42%)}} }}
+.home-content {{ position:relative; z-index:1; padding:42px 46px; max-width:980px; }}
+.home-logo {{ height:34px; margin-bottom:42px; }}
+.home-eyebrow {{ color:{GOLD}; font-size:12px; font-weight:900; letter-spacing:1.8px; text-transform:uppercase; margin-bottom:12px; }}
+.home-title {{ color:#fff; font-size:48px; line-height:1.04; font-weight:900; letter-spacing:0; max-width:760px; margin-bottom:18px; }}
+.home-copy {{ color:rgba(255,255,255,.78); font-size:15px; line-height:1.75; max-width:720px; margin-bottom:28px; }}
+.home-metrics {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; max-width:860px; }}
+.home-metric {{ background:rgba(12,18,29,.72); border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:13px 14px; backdrop-filter:blur(8px); }}
+.home-metric-k {{ color:rgba(255,255,255,.58); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:6px; }}
+.home-metric-v {{ color:#fff; font-family:'SF Mono','Consolas',monospace; font-size:23px; font-weight:900; line-height:1; }}
+.home-metric-c {{ color:rgba(255,255,255,.62); font-size:11px; margin-top:7px; }}
+.home-grid {{ display:grid; grid-template-columns:1.15fr .85fr; gap:14px; margin-bottom:14px; }}
+.home-entry-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:10px; }}
+.home-entry {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:116px; }}
+.home-entry-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:9px; }}
+.home-entry-t {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:8px; }}
+.home-entry-d {{ color:{T['text2']}; font-size:12px; line-height:1.55; }}
+.home-signal-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }}
+.home-signal {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:108px; }}
+.home-signal-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:7px; }}
+.home-signal-v {{ color:{T['text']}; font-size:13px; line-height:1.65; }}
 .board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
@@ -297,6 +324,13 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
 [data-testid="stMetricValue"] {{ font-size:{fs(26)}px !important; }}
 [data-testid="stMetricLabel"] {{ font-size:{fs(13)}px !important; }}
 [data-testid="stRadio"] label p {{ font-size:{fs(13)}px !important; }}
+@media (max-width: 1000px) {{
+  .home-hero {{ min-height:560px; }}
+  .home-content {{ padding:30px 24px; }}
+  .home-title {{ font-size:34px; }}
+  .home-metrics, .home-entry-grid, .home-signal-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .home-grid {{ grid-template-columns:1fr; }}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1417,13 +1451,16 @@ CHART_CONFIG = {
 # ════════════════════════════════════════════════════════════
 # 사이드바
 # ════════════════════════════════════════════════════════════
+def go_to_menu(target):
+    st.session_state.main_menu = target
+
 with st.sidebar:
     st.markdown('<div class="sb-brand">LVT INTELLIGENCE</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
     menu = st.radio("", [
-        "📊 Overview", "🛢 원자재", "🚢 Freight",
+        "🏠 Home", "📊 Overview", "🛢 원자재", "🚢 Freight",
         "🎯 Market Insight", "🎨 Design Intelligence", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
-    ], label_visibility="collapsed")
+    ], label_visibility="collapsed", key="main_menu")
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
     # 테마 토글
@@ -1470,9 +1507,84 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
+# 🏠 HOME
+# ════════════════════════════════════════════════════════════
+if menu == "🏠 Home":
+    home_summary = build_market_summary(
+        v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
+        v_fedfunds, usd_krw, v_wti, d_wti
+    )
+    home_alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
+    top_alert = home_alerts[0] if home_alerts else {"title": "Normal", "value": "OK", "message": "주요 임계값 초과 항목은 없습니다."}
+    hero_logo = f'<img class="home-logo" src="data:image/png;base64,{LOGO_WHITE}"/>' if LOGO_WHITE else '<div class="home-logo" style="color:#fff;font-weight:900;font-size:24px">KCC GLASS</div>'
+    st.markdown(f"""
+    <section class="home-hero">
+      <div class="home-content">
+        {hero_logo}
+        <div class="home-eyebrow">Global LVT Market Intelligence Platform</div>
+        <div class="home-title">미국 LVT 시장을 한 화면에서 읽고, 바로 실행합니다.</div>
+        <div class="home-copy">
+          영업, 물류, 구매, 디자인팀이 같은 시장 지표와 뉴스를 보고 의사결정할 수 있도록 만든
+          KCC Glass 해외영업 통합 인텔리전스 터미널입니다.
+        </div>
+        <div class="home-metrics">
+          <div class="home-metric"><div class="home-metric-k">USD/KRW</div><div class="home-metric-v">{usd_krw:,.0f}</div><div class="home-metric-c">환율 모니터링</div></div>
+          <div class="home-metric"><div class="home-metric-k">SCFI</div><div class="home-metric-v">{v_scfi:,.0f}</div><div class="home-metric-c">4주 {d_scfi:+.1f}%</div></div>
+          <div class="home-metric"><div class="home-metric-k">WTI</div><div class="home-metric-v">{v_wti:.1f}</div><div class="home-metric-c">원자재 비용 신호</div></div>
+          <div class="home-metric"><div class="home-metric-k">30Y Mortgage</div><div class="home-metric-v">{v_mortgage:.2f}%</div><div class="home-metric-c">수요 심리 지표</div></div>
+        </div>
+      </div>
+    </section>
+    """, unsafe_allow_html=True)
+
+    h1, h2 = st.columns([1.45, 1], gap="medium")
+    with h1:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Team Entry</span><span class="p-m">Choose your workflow</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="home-entry-grid">
+          <div class="home-entry"><div class="home-entry-k">Sales</div><div class="home-entry-t">Market Overview</div><div class="home-entry-d">상부 보고와 영업 메시지에 필요한 핵심 지표 요약</div></div>
+          <div class="home-entry"><div class="home-entry-k">Logistics</div><div class="home-entry-t">Freight Monitor</div><div class="home-entry-d">SCFI/CCFI, 운임 뉴스, 선적 리스크 체크</div></div>
+          <div class="home-entry"><div class="home-entry-k">Design</div><div class="home-entry-t">Design Trend</div><div class="home-entry-d">FCW/FCNews 기반 디자인 키워드와 제품 적용 포인트</div></div>
+          <div class="home-entry"><div class="home-entry-k">Purchase</div><div class="home-entry-t">Raw Materials</div><div class="home-entry-d">PVC, DOTP, WTI, 환율 흐름과 전월/전년 비교</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+        b1, b2, b3, b4 = st.columns(4)
+        with b1:
+            st.button("Overview", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_overview")
+        with b2:
+            st.button("Freight", use_container_width=True, on_click=go_to_menu, args=("🚢 Freight",), key="home_to_freight")
+        with b3:
+            st.button("Design", use_container_width=True, on_click=go_to_menu, args=("🎨 Design Intelligence",), key="home_to_design")
+        with b4:
+            st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with h2:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Today Signal</span><span class="p-m">Executive snapshot</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="home-signal-grid">
+          <div class="home-signal"><div class="home-signal-k">Headline</div><div class="home-signal-v">{html.escape(home_summary["headline"])}</div></div>
+          <div class="home-signal"><div class="home-signal-k">Top Risk</div><div class="home-signal-v">{html.escape(top_alert["title"])} {html.escape(top_alert["value"])}<br>{html.escape(top_alert["message"])}</div></div>
+          <div class="home-signal"><div class="home-signal-k">Monthly Report</div><div class="home-signal-v">Overview에서 1페이지 보고서와 월간 종합 PDF를 바로 다운로드할 수 있습니다.</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.button("월간 PDF 보고서로 이동", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_report")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Platform Role</span><span class="p-m">Shared operating view</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-k">영업팀</div><div class="summary-v">환율, 주택시장, 관세, 타깃 거래선을 묶어 고객 미팅 전 시장 메시지를 정리합니다.</div></div>
+      <div class="summary-card"><div class="summary-k">물류팀</div><div class="summary-v">운임 지수와 뉴스 흐름을 통해 선적 타이밍과 운임 리스크를 사전에 공유합니다.</div></div>
+      <div class="summary-card"><div class="summary-k">구매/디자인팀</div><div class="summary-v">PVC/DOTP 지수와 미국 디자인 키워드를 함께 보며 제품·가격 전략의 근거를 만듭니다.</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
 # 📊 OVERVIEW
 # ════════════════════════════════════════════════════════════
-if menu == "📊 Overview":
+elif menu == "📊 Overview":
     st.markdown('<div class="sec"><span class="sec-t">Market Overview</span><span class="sec-s">해외영업 시장 분석 · 미국 LVT 수출</span><span class="live"><span class="dot"></span>Live</span></div>', unsafe_allow_html=True)
 
     def chg(v, unit="%", suffix=""):

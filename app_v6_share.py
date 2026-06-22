@@ -325,6 +325,17 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
+.home-command-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }}
+.home-command-card {{ background:linear-gradient(135deg,{T['panel2']},color-mix(in srgb,{T['panel']} 78%,#000)); border:1px solid {T['border']}; border-radius:9px; padding:14px; min-height:118px; position:relative; overflow:hidden; box-shadow:0 12px 34px rgba(0,0,0,.10); }}
+.home-command-card::after {{ content:""; position:absolute; width:120px; height:120px; right:-62px; bottom:-72px; border-radius:50%; background:color-mix(in srgb,{GOLD} 13%,transparent); }}
+.home-command-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; position:relative; z-index:1; }}
+.home-command-v {{ color:{T['text']}; font-size:18px; font-weight:900; line-height:1.22; margin-bottom:8px; position:relative; z-index:1; }}
+.home-command-c {{ color:{T['text2']}; font-size:12px; line-height:1.55; position:relative; z-index:1; }}
+.home-workflow {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }}
+.home-step {{ background:{T['panel']}; border:1px solid {T['border']}; border-radius:8px; padding:12px 13px; display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:start; min-height:86px; }}
+.home-step-no {{ width:30px; height:30px; border-radius:50%; background:{NAVY}; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'SF Mono','Consolas',monospace; font-size:11px; font-weight:900; box-shadow:inset 0 -2px 0 rgba(232,179,57,.55); }}
+.home-step-t {{ color:{T['text']}; font-size:13px; font-weight:900; margin-bottom:4px; }}
+.home-step-d {{ color:{T['text2']}; font-size:11px; line-height:1.45; }}
 .esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,#0B3D2E 72%,{T['panel2']}),color-mix(in srgb,#10281F 58%,{T['panel']})); border:1px solid color-mix(in srgb,#22C55E 42%,{T['border']}); border-radius:9px; padding:17px; position:relative; overflow:hidden; margin-bottom:12px; box-shadow:0 18px 42px rgba(0,0,0,.12); }}
 .esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:rgba(34,197,94,.18); font-size:58px; font-weight:900; letter-spacing:-2px; }}
 .esg-k {{ color:#4ADE80; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
@@ -420,6 +431,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-content {{ padding:30px 24px; }}
   .home-title {{ font-size:34px; }}
   .home-metrics, .home-entry-grid, .home-signal-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .home-command-grid, .home-workflow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
 }}
@@ -1912,6 +1924,9 @@ if menu == "🏠 Home":
     home_alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
     top_alert = home_alerts[0] if home_alerts else {"title": "Normal", "value": "OK", "message": "주요 임계값 초과 항목은 없습니다."}
     home_insight = build_home_insight(home_summary, home_alerts, d_fx, d_scfi, d_pvc, d_dotp)
+    home_actions = build_action_recommendations(home_alerts, usd_krw, v_scfi, d_scfi, v_mortgage, d_pvc, d_dotp)
+    home_action_area = home_actions.iloc[0]["영역"] if len(home_actions) else "운영"
+    home_action_text = home_actions.iloc[0]["권고 액션"] if len(home_actions) else "주요 지표를 주간 단위로 점검하세요."
     fx_spark = home_sparkline(df_fx, "USD/KRW", GOLD)
     scfi_spark = home_sparkline(df_freight, "SCFI", "#4ADE80")
     wti_spark = home_sparkline(df_wti, "WTI", "#FF6B6E")
@@ -1940,6 +1955,37 @@ if menu == "🏠 Home":
         </div>
       </div>
     </section>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="home-command-grid">
+      <div class="home-command-card">
+        <div class="home-command-k">Market Pulse</div>
+        <div class="home-command-v">오늘의 시장 한 줄</div>
+        <div class="home-command-c">{html.escape(home_summary["headline"])}</div>
+      </div>
+      <div class="home-command-card">
+        <div class="home-command-k">Cost Watch</div>
+        <div class="home-command-v">PVC {d_pvc:+.1f}% · DOTP {d_dotp:+.1f}%</div>
+        <div class="home-command-c">WTI {v_wti:.1f}, USD/KRW {usd_krw:,.0f}. 구매/견적 원가 전제 점검 구간입니다.</div>
+      </div>
+      <div class="home-command-card">
+        <div class="home-command-k">Logistics Signal</div>
+        <div class="home-command-v">SCFI {v_scfi:,.0f}</div>
+        <div class="home-command-c">4주 변동 {d_scfi:+.1f}%. 선복, 운임 유효기간, 출고 타이밍을 함께 확인하세요.</div>
+      </div>
+      <div class="home-command-card">
+        <div class="home-command-k">Recommended Action · {html.escape(str(home_action_area))}</div>
+        <div class="home-command-v">다음 실행 포인트</div>
+        <div class="home-command-c">{html.escape(str(home_action_text))}</div>
+      </div>
+    </div>
+    <div class="home-workflow">
+      <div class="home-step"><div class="home-step-no">01</div><div><div class="home-step-t">시장 신호 확인</div><div class="home-step-d">Overview에서 수요, 환율, 금리와 경고 신호를 먼저 봅니다.</div></div></div>
+      <div class="home-step"><div class="home-step-no">02</div><div><div class="home-step-t">비용 압박 점검</div><div class="home-step-d">원자재와 운임 지수로 견적 전제를 업데이트합니다.</div></div></div>
+      <div class="home-step"><div class="home-step-no">03</div><div><div class="home-step-t">경쟁사/거래선 확인</div><div class="home-step-d">타깃 거래선과 ImportYeti 업로드 자료로 시장 움직임을 봅니다.</div></div></div>
+      <div class="home-step"><div class="home-step-no">04</div><div><div class="home-step-t">보고서로 마감</div><div class="home-step-d">월간 PDF에 핵심 지표와 액션을 묶어 상부 보고에 사용합니다.</div></div></div>
+    </div>
     """, unsafe_allow_html=True)
 
     h1, h2 = st.columns([1.45, 1], gap="medium")

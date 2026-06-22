@@ -200,6 +200,14 @@ st.markdown(f"""
 .freight-card.featured .freight-title {{ font-size:19px; }}
 .freight-title:hover {{ color:{T['accent']}; }}
 .freight-read {{ margin-top:auto; color:{T['accent']}; font-size:12px; font-weight:800; text-decoration:none; }}
+.trend-pill-wrap {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }}
+.trend-pill {{ display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid {T['border']}; border-radius:999px; background:{T['panel2']}; color:{T['text']}; font-size:12px; font-weight:800; }}
+.trend-count {{ color:{GOLD}; font-family:'SF Mono','Consolas',monospace; }}
+.mood-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }}
+.mood-card {{ position:relative; height:180px; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; background:{T['panel2']}; }}
+.mood-card img {{ width:100%; height:100%; object-fit:cover; display:block; filter:saturate(.95) contrast(1.04); }}
+.mood-fallback {{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#24304A,#0E2372 52%,#E8B339); color:white; font-weight:900; letter-spacing:1px; text-align:center; padding:12px; }}
+.mood-overlay {{ position:absolute; left:0; right:0; bottom:0; padding:10px; background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0)); color:#fff; font-size:12px; font-weight:800; line-height:1.3; }}
 
 /* 시뮬레이터 결과 카드 */
 .sim-result {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:16px; text-align:center; }}
@@ -873,6 +881,133 @@ def build_customer_impact(market_view, state_summary, alerts):
     )
     return impact.sort_values("impact_score", ascending=False)
 
+DESIGN_KEYWORDS = {
+    "warm wood": ["warm wood", "warm oak", "natural oak", "blonde oak", "oak visuals", "soft oak"],
+    "wide plank": ["wide plank", "longer plank", "long plank", "plank"],
+    "matte finish": ["matte", "low gloss", "soft finish"],
+    "stone look": ["stone", "marble", "travertine", "slate", "mineral"],
+    "commercial neutral": ["commercial", "neutral", "greige", "beige", "taupe"],
+    "biophilic": ["biophilic", "nature", "natural", "organic"],
+    "sustainable": ["sustainable", "sustainability", "recycled", "responsible"],
+    "rigid core": ["rigid", "rigid core", "spc", "wpc"],
+    "performance": ["performance", "durable", "scratch", "waterproof"],
+    "texture": ["texture", "embossed", "realistic", "grain"],
+}
+
+DESIGN_TAXONOMY = {
+    "Material": {
+        "Wood": ["wood", "oak", "walnut", "maple", "plank"],
+        "Stone": ["stone", "marble", "slate", "travertine", "mineral"],
+        "Concrete": ["concrete", "cement", "industrial"],
+        "Textile": ["textile", "woven", "fabric"],
+        "Ceramic": ["ceramic", "tile", "porcelain"],
+    },
+    "Color": {
+        "Warm Neutral": ["warm", "beige", "taupe", "honey", "natural"],
+        "Greige": ["greige", "gray", "grey"],
+        "Light Oak": ["blonde", "light", "white oak"],
+        "Dark Walnut": ["dark", "walnut", "espresso"],
+        "Soft Beige": ["soft", "cream", "sand"],
+    },
+    "Pattern": {
+        "Wide Plank": ["wide plank", "long plank", "plank"],
+        "Herringbone": ["herringbone", "chevron"],
+        "Mixed Width": ["mixed width", "multi width"],
+        "Mineral": ["mineral", "terrazzo", "aggregate"],
+        "Realistic Texture": ["texture", "embossed", "grain", "realistic"],
+    },
+}
+
+def collect_design_articles(limit=18):
+    categories = ["Style & Design", "Products", "Features", "Sustainability"]
+    rows = []
+    seen = set()
+    for cat in categories:
+        for item in llm.fetch_fcw_news(cat, limit=8):
+            link = item.get("link", "")
+            title = item.get("title", "")
+            if not link or link in seen or not title:
+                continue
+            item = dict(item)
+            item["design_source_category"] = cat
+            rows.append(item)
+            seen.add(link)
+            if len(rows) >= limit:
+                return rows
+    return rows
+
+def design_text_blob(items):
+    return " ".join([f"{i.get('title','')} {i.get('summary','')}" for i in items]).lower()
+
+def extract_design_keywords(items):
+    blob = design_text_blob(items)
+    rows = []
+    for key, terms in DESIGN_KEYWORDS.items():
+        count = sum(blob.count(term) for term in terms)
+        if count:
+            rows.append({"Keyword": key, "Mentions": count})
+    if not rows:
+        rows = [
+            {"Keyword": "warm wood", "Mentions": 1},
+            {"Keyword": "wide plank", "Mentions": 1},
+            {"Keyword": "matte finish", "Mentions": 1},
+            {"Keyword": "commercial neutral", "Mentions": 1},
+            {"Keyword": "performance", "Mentions": 1},
+        ]
+    return pd.DataFrame(rows).sort_values("Mentions", ascending=False).reset_index(drop=True)
+
+def build_design_taxonomy(items):
+    blob = design_text_blob(items)
+    rows = []
+    for axis, groups in DESIGN_TAXONOMY.items():
+        for name, terms in groups.items():
+            score = sum(blob.count(t) for t in terms)
+            rows.append({"Axis": axis, "Trend Bucket": name, "Signal": score})
+    df = pd.DataFrame(rows)
+    return df.sort_values(["Axis", "Signal"], ascending=[True, False])
+
+def build_product_implications(keyword_df):
+    implication_map = {
+        "warm wood": "주거용 LVT 우드 패턴에서 warm oak / natural oak 컬러웨이 보강 검토",
+        "wide plank": "롱/와이드 플랭크 규격과 샘플 보드 연출 강화",
+        "matte finish": "저광택 표면, 리얼 텍스처, 무광 촉감 표현 샘플 우선 검토",
+        "stone look": "상업용/호스피탈리티용 스톤·미네랄 룩 패턴 레퍼런스 확보",
+        "commercial neutral": "오피스·리테일 채널용 저채도 greige/taupe 팔레트 검토",
+        "biophilic": "자연 소재감, 부드러운 우드 그레인, 실내 웰빙 메시지와 연결",
+        "sustainable": "친환경/재활용/책임소재 메시지를 제품 스토리와 연결",
+        "rigid core": "SPC/rigid core 제품의 디자인 완성도와 성능 메시지 동시 강화",
+        "performance": "내구성, 방수, 유지관리 장점을 디자인 설명과 함께 제안",
+        "texture": "EIR/embossing 표현과 실제 목재 질감 차별화 포인트 정리",
+    }
+    rows = []
+    for _, r in keyword_df.head(8).iterrows():
+        key = r["Keyword"]
+        rows.append({
+            "Trend": key,
+            "Signal": int(r["Mentions"]),
+            "Product Implication": implication_map.get(key, "제품 컬러/패턴/표면감 레퍼런스 후보로 검토"),
+        })
+    return pd.DataFrame(rows)
+
+def render_trend_pills(keyword_df):
+    pills = ""
+    for _, r in keyword_df.head(10).iterrows():
+        pills += f'<span class="trend-pill">{html.escape(str(r["Keyword"]))}<span class="trend-count">{int(r["Mentions"])}</span></span>'
+    return f'<div class="trend-pill-wrap">{pills}</div>'
+
+def render_moodboard(items):
+    cards = ""
+    for item in items[:8]:
+        title = html.escape(item.get("title", "Design Reference"))
+        link = html.escape(item.get("link", ""))
+        image = html.escape(item.get("image", "") or "")
+        media = f'<img src="{image}" alt="{title}" loading="lazy"/>' if image else '<div class="mood-fallback">DESIGN<br>REFERENCE</div>'
+        cards += (
+            f'<a class="mood-card" href="{link}" target="_blank" rel="noopener noreferrer">'
+            f'{media}<div class="mood-overlay">{title}</div></a>'
+        )
+    return f'<div class="mood-grid">{cards}</div>'
+
 def create_pdf_report(metrics, summary, ai_briefing=""):
     from io import BytesIO
     from reportlab.lib import colors
@@ -1139,7 +1274,7 @@ with st.sidebar:
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
     menu = st.radio("", [
         "📊 Overview", "🛢 원자재", "🚢 Freight",
-        "🎯 Market Insight", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
+        "🎯 Market Insight", "🎨 Design Intelligence", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
     ], label_visibility="collapsed")
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -2218,6 +2353,114 @@ elif menu == "🎯 Market Insight":
         )
         st.caption("현재 데이터는 제공된 캡처에서 확인 가능한 항목 기준입니다. 원본 엑셀을 주면 순위와 매출값을 더 정확하게 정리할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 🎨 DESIGN INTELLIGENCE
+# ════════════════════════════════════════════════════════════
+elif menu == "🎨 Design Intelligence":
+    st.markdown('<div class="sec"><span class="sec-t">Design Intelligence</span><span class="sec-s">미국 바닥재 디자인 트렌드 · 제품 레퍼런스</span><span class="live"><span class="dot"></span>FCW</span></div>', unsafe_allow_html=True)
+
+    design_items = collect_design_articles(limit=18)
+    keyword_df = extract_design_keywords(design_items)
+    taxonomy_df = build_design_taxonomy(design_items)
+    implication_df = build_product_implications(keyword_df)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("Design Articles", f"{len(design_items):,.0f}")
+    with k2:
+        st.metric("Top Keyword", keyword_df.iloc[0]["Keyword"] if len(keyword_df) else "N/A")
+    with k3:
+        material_top = taxonomy_df[taxonomy_df["Axis"] == "Material"].sort_values("Signal", ascending=False).iloc[0]
+        st.metric("Material Signal", material_top["Trend Bucket"])
+    with k4:
+        pattern_top = taxonomy_df[taxonomy_df["Axis"] == "Pattern"].sort_values("Signal", ascending=False).iloc[0]
+        st.metric("Pattern Signal", pattern_top["Trend Bucket"])
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">FCW Style / Product / Feature scan</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(render_trend_pills(keyword_df), unsafe_allow_html=True)
+    kw_col, tax_col = st.columns([1, 1], gap="medium")
+    with kw_col:
+        fig_kw = go.Figure(go.Bar(
+            x=keyword_df.head(10).sort_values("Mentions")["Mentions"],
+            y=keyword_df.head(10).sort_values("Mentions")["Keyword"],
+            orientation="h",
+            marker_color=GOLD,
+            hovertemplate="%{y}<br>Mentions: %{x}<extra></extra>",
+        ))
+        chart_layout(fig_kw, 280)
+        fig_kw.update_layout(xaxis_title="Mentions", yaxis_title=None, showlegend=False)
+        st.plotly_chart(fig_kw, use_container_width=True, config=CHART_CONFIG)
+    with tax_col:
+        tax_pivot = taxonomy_df.sort_values(["Axis", "Signal"], ascending=[True, False]).groupby("Axis").head(4)
+        fig_tax = go.Figure(go.Bar(
+            x=tax_pivot["Signal"],
+            y=tax_pivot["Axis"] + " · " + tax_pivot["Trend Bucket"],
+            orientation="h",
+            marker_color=T["accent"],
+            hovertemplate="%{y}<br>Signal: %{x}<extra></extra>",
+        ))
+        chart_layout(fig_tax, 280)
+        fig_tax.update_layout(xaxis_title="Signal", yaxis_title=None, showlegend=False)
+        st.plotly_chart(fig_tax, use_container_width=True, config=CHART_CONFIG)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    article_col, insight_col = st.columns([1.45, 1], gap="medium")
+    with article_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Design Trend Articles</span><span class="p-m">Visual reference cards</span></div><div class="p-body">', unsafe_allow_html=True)
+        if design_items:
+            def design_card(item, featured=False):
+                title = html.escape(item.get("title", ""))
+                link = html.escape(item.get("link", ""))
+                published = html.escape(item.get("published", "") or "Latest")
+                summary = html.escape(item.get("summary", ""))
+                image = html.escape(item.get("image", "") or "")
+                tag = html.escape(item.get("design_source_category", "Design"))
+                media = f'<img src="{image}" alt="{title}" loading="lazy"/>' if image else f'<div class="fcw-fallback"><span>{tag}</span></div>'
+                summary_html = f'<div class="fcw-summary">{summary}</div>' if summary else ""
+                klass = "fcw-card featured" if featured else "fcw-card"
+                return (
+                    f'<div class="{klass}">'
+                    f'<div class="fcw-media">{media}</div>'
+                    f'<div class="fcw-body">'
+                    f'<div class="fcw-meta">{published} · {tag}</div>'
+                    f'<a class="fcw-title" href="{link}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                    f'{summary_html}'
+                    f'<a class="fcw-read" href="{link}" target="_blank" rel="noopener noreferrer">Read More &rarr;</a>'
+                    f'</div></div>'
+                )
+            st.markdown(design_card(design_items[0], featured=True), unsafe_allow_html=True)
+            st.markdown(f'<div class="fcw-grid">{"".join(design_card(item) for item in design_items[1:7])}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="placeholder"><span style="font-size:26px">DESIGN</span><span>디자인 기사 데이터를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with insight_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Material / Color / Pattern</span><span class="p-m">Design buckets</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(dataframe_to_dark_table(taxonomy_df.sort_values(["Axis", "Signal"], ascending=[True, False]).groupby("Axis").head(5)), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Product Implication</span><span class="p-m">KCC LVT lens</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(dataframe_to_dark_table(implication_df), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Design Moodboard</span><span class="p-m">Visual references</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(render_moodboard(design_items), unsafe_allow_html=True)
+    st.caption("이미지는 FCW 기사에서 확인 가능한 대표 이미지를 우선 사용하며, 이미지가 없는 경우 대체 디자인 레퍼런스 카드로 표시됩니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    export_design = pd.DataFrame(design_items)
+    excel_download_button(
+        "📊 Design Intelligence 엑셀 다운로드",
+        {
+            "Design Articles": export_design,
+            "Keyword Radar": keyword_df,
+            "Material Color Pattern": taxonomy_df,
+            "Product Implication": implication_df,
+        },
+        f"kcc_lvt_design_intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "design_intelligence_excel_download",
+    )
 
 # ════════════════════════════════════════════════════════════
 # 📰 FCW NEWS

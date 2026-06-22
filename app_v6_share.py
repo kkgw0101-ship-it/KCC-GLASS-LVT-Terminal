@@ -295,6 +295,13 @@ st.markdown(f"""
 .co-sub {{ color:{T['text2']}; font-size:11px; margin-top:7px; line-height:1.45; }}
 .co-note {{ color:{T['text3']}; font-size:11px; line-height:1.6; margin-bottom:12px; }}
 .co-pill {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; font-size:11px; font-weight:800; margin-right:6px; margin-bottom:6px; }}
+.upload-done {{ background:color-mix(in srgb,{T['up']} 14%,{T['panel2']}); border:1px solid color-mix(in srgb,{T['up']} 42%,{T['border']}); border-left:4px solid {T['up']}; border-radius:8px; padding:14px 16px; margin:10px 0 14px 0; }}
+.upload-done-t {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:7px; }}
+.upload-done-d {{ color:{T['text2']}; font-size:12px; line-height:1.6; }}
+.upload-wait {{ background:{T['panel']}; border:1px dashed {T['border']}; border-radius:10px; padding:34px 18px; min-height:250px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; margin-top:14px; }}
+.upload-wait-icon {{ font-size:32px; margin-bottom:10px; }}
+.upload-wait-t {{ color:{T['text']}; font-size:18px; font-weight:900; margin-bottom:8px; }}
+.upload-wait-d {{ color:{T['text2']}; font-size:13px; line-height:1.7; max-width:720px; }}
 .board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
@@ -825,7 +832,7 @@ def get_competitor_export_df():
         if not df.empty:
             df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce").fillna(0)
             return df
-    return get_demo_competitor_export_df()
+    return pd.DataFrame(columns=["competitor", "month", "weight_kg", "shipments", "quantity"])
 
 def get_competitor_destination_df():
     if "competitor_destination_rows" in st.session_state:
@@ -836,7 +843,7 @@ def get_competitor_destination_df():
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
             return df
-    return get_demo_competitor_destination_df()
+    return pd.DataFrame(columns=["competitor", "importer", "country", "destination", "weight_kg", "shipments", "quantity"])
 
 def get_competitor_product_df():
     if "competitor_product_rows" in st.session_state:
@@ -2959,32 +2966,97 @@ elif menu == "🎯 Market Insight":
 # 🏭 COMPETITOR EXPORT
 # ════════════════════════════════════════════════════════════
 elif menu == "🏭 Competitor Export":
-    st.markdown('<div class="sec"><span class="sec-t">Competitor Export Tracker</span><span class="sec-s">ImportYeti · B/L Weight 기준 국내 경쟁사 미국 수출동향 추정</span><span class="live"><span class="dot"></span>Demo ready</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><span class="sec-t">Competitor Export Tracker</span><span class="sec-s">ImportYeti · B/L Weight 기준 국내 경쟁사 미국 수출동향 추정</span><span class="live"><span class="dot"></span>Session only</span></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="co-note">현재 화면은 캡처 기준 데모 데이터로 만든 뼈대입니다. 실제 원본 엑셀을 업로드하면 월별 경쟁사 Weight 흐름을 같은 화면에서 바로 분석하도록 연결할 수 있습니다. B/L Weight 기준이므로 매출액이나 실제 시장점유율이 아닌 방향성 추정치로 보는 것이 안전합니다.</div>',
+        '<div class="co-note">이 화면은 ImportYeti 원본 엑셀을 업로드한 현재 세션에서만 분석됩니다. 원본 데이터는 GitHub/코드에 저장하지 않으며, B/L Weight 기준이므로 매출액이나 실제 시장점유율이 아닌 방향성 추정치로 보는 것이 안전합니다.</div>',
         unsafe_allow_html=True,
     )
 
-    with st.expander("ImportYeti Excel Upload Center — 원본 파일 연결 준비"):
-        uploaded_competitor = st.file_uploader("경쟁사 월별 Weight 피벗 엑셀 업로드", type=["xlsx", "xls"], key="competitor_export_upload")
+    with st.expander("ImportYeti Excel Upload Center — 원본 파일 업로드", expanded=("competitor_export_rows" not in st.session_state)):
+        uploaded_competitor = st.file_uploader("ImportYeti raw 엑셀 업로드", type=["xlsx", "xls"], key="competitor_export_upload")
         if uploaded_competitor is not None:
-            try:
-                monthly_df, detail_df, product_df = normalize_importyeti_raw_upload(uploaded_competitor)
-                set_competitor_export_data(monthly_df, detail_df, product_df)
-                st.success("ImportYeti raw 데이터를 현재 세션에 반영했습니다. 월별/수입자/제품 설명 집계를 자동 생성했습니다.")
-                st.rerun()
-            except Exception as e:
+            upload_signature = f"{uploaded_competitor.name}:{getattr(uploaded_competitor, 'size', 0)}"
+            if st.session_state.get("competitor_upload_signature") != upload_signature:
                 try:
-                    uploaded_competitor.seek(0)
-                    uploaded_df = normalize_competitor_upload(uploaded_competitor)
-                    set_competitor_export_df(uploaded_df)
-                    st.success("피벗형 월별 Weight 데이터를 현재 세션에 반영했습니다.")
-                    st.rerun()
-                except Exception as e2:
-                    st.error(f"업로드 파일 구조를 확인해주세요. Raw 오류: {e} / Pivot 오류: {e2}")
-        st.caption("Raw 권장 컬럼: date, company, weight, supplier, route, product_description. 피벗형 파일은 업체명 + 2025-01 같은 월별 Weight 컬럼도 지원합니다.")
+                    monthly_df, detail_df, product_df = normalize_importyeti_raw_upload(uploaded_competitor)
+                    set_competitor_export_data(monthly_df, detail_df, product_df)
+                    st.session_state.competitor_upload_signature = upload_signature
+                    st.session_state.competitor_upload_status = {
+                        "file": uploaded_competitor.name,
+                        "mode": "ImportYeti raw",
+                        "months": f"{monthly_df['month'].min()} ~ {monthly_df['month'].max()}",
+                        "competitors": int(monthly_df["competitor"].nunique()),
+                        "monthly_rows": int(len(monthly_df)),
+                        "detail_rows": int(len(detail_df)),
+                        "weight": float(monthly_df["weight_kg"].sum()),
+                        "time": datetime.now().strftime("%H:%M:%S"),
+                    }
+                    st.success("업로드 완료: ImportYeti raw 데이터를 현재 세션에 반영했습니다.")
+                except Exception as e:
+                    try:
+                        uploaded_competitor.seek(0)
+                        uploaded_df = normalize_competitor_upload(uploaded_competitor)
+                        set_competitor_export_df(uploaded_df)
+                        st.session_state.competitor_upload_signature = upload_signature
+                        st.session_state.competitor_upload_status = {
+                            "file": uploaded_competitor.name,
+                            "mode": "Pivot monthly",
+                            "months": f"{uploaded_df['month'].min()} ~ {uploaded_df['month'].max()}",
+                            "competitors": int(uploaded_df["competitor"].nunique()),
+                            "monthly_rows": int(len(uploaded_df)),
+                            "detail_rows": 0,
+                            "weight": float(uploaded_df["weight_kg"].sum()),
+                            "time": datetime.now().strftime("%H:%M:%S"),
+                        }
+                        st.success("업로드 완료: 피벗형 월별 Weight 데이터를 현재 세션에 반영했습니다.")
+                    except Exception as e2:
+                        st.error(f"업로드 파일 구조를 확인해주세요. Raw 오류: {e} / Pivot 오류: {e2}")
+            else:
+                st.info("이미 반영된 파일입니다. 아래 대시보드에 업로드 데이터가 표시됩니다.")
+        if "competitor_export_rows" in st.session_state:
+            if st.button("업로드 데이터 초기화", use_container_width=True, key="clear_competitor_upload"):
+                for key in [
+                    "competitor_export_rows", "competitor_destination_rows", "competitor_product_rows",
+                    "competitor_upload_signature", "competitor_upload_status",
+                ]:
+                    st.session_state.pop(key, None)
+                st.success("업로드 데이터를 초기화했습니다. 새 파일을 다시 업로드해주세요.")
+                st.rerun()
+        st.caption("Raw 권장 컬럼: date, company, weight, supplier, route, product_description. 업로드 데이터는 현재 세션에서만 분석되며 GitHub/코드에 저장되지 않습니다.")
+
+    upload_status = st.session_state.get("competitor_upload_status")
+    if upload_status:
+        st.markdown(
+            f"""
+            <div class="upload-done">
+              <div class="upload-done-t">업로드 반영 완료</div>
+              <div class="upload-done-d">
+                파일: {html.escape(upload_status.get("file", ""))} · 형식: {html.escape(upload_status.get("mode", ""))} ·
+                기간: {html.escape(str(upload_status.get("months", "")))} · 경쟁사 {upload_status.get("competitors", 0):,.0f}개 ·
+                월별 집계 {upload_status.get("monthly_rows", 0):,.0f}행 · 상세 집계 {upload_status.get("detail_rows", 0):,.0f}행 ·
+                총 Weight {upload_status.get("weight", 0):,.0f} kg · 반영시각 {html.escape(upload_status.get("time", ""))}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     df_comp = get_competitor_export_df()
+    if df_comp.empty:
+        st.markdown(
+            """
+            <div class="upload-wait">
+              <div class="upload-wait-icon">📤</div>
+              <div class="upload-wait-t">ImportYeti 원본 엑셀을 업로드하면 분석이 시작됩니다</div>
+              <div class="upload-wait-d">
+                업로드 전에는 경쟁사 수출동향 데이터를 표시하지 않습니다. 파일을 넣으면 월별 Weight, 경쟁사별 비중,
+                수입자/도착지 상세, 제품 설명 집계가 같은 화면에 자동 반영됩니다.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.stop()
     df_dest = get_competitor_destination_df()
     df_product = get_competitor_product_df()
     months = sorted(df_comp["month"].dropna().unique().tolist())

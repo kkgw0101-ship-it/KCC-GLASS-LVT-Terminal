@@ -386,7 +386,7 @@ def format_table_value(v):
     return html.escape(str(v))
 
 def table_cell(v, col=None):
-    if isinstance(v, str) and ("<span" in v or "<br" in v):
+    if isinstance(v, str) and ("<span" in v or "<br" in v or "<a " in v):
         return v
     return format_table_value(v)
 
@@ -918,23 +918,62 @@ DESIGN_TAXONOMY = {
     },
 }
 
-def collect_design_articles(limit=18):
-    categories = ["Style & Design", "Products", "Features", "Sustainability"]
+def collect_design_articles(limit=18, source_mode="FCW + FCNews"):
+    fcw_categories = ["Style & Design", "Products", "Features", "Sustainability"]
+    fcnews_categories = ["Resilient", "Wood", "Tile", "Carpet", "Technology", "Laminate"]
     rows = []
     seen = set()
-    for cat in categories:
-        for item in llm.fetch_fcw_news(cat, limit=8):
-            link = item.get("link", "")
-            title = item.get("title", "")
-            if not link or link in seen or not title:
-                continue
-            item = dict(item)
-            item["design_source_category"] = cat
-            rows.append(item)
-            seen.add(link)
-            if len(rows) >= limit:
-                return rows
-    return rows
+    if source_mode in ["FCW + FCNews", "FCW only"]:
+        for cat in fcw_categories:
+            for item in llm.fetch_fcw_news(cat, limit=8):
+                link = item.get("link", "")
+                title = item.get("title", "")
+                if not link or link in seen or not title:
+                    continue
+                item = dict(item)
+                item["design_source_category"] = cat
+                item["source_group"] = "FCW"
+                rows.append(item)
+                seen.add(link)
+                if len(rows) >= limit and source_mode == "FCW only":
+                    return rows
+    if source_mode in ["FCW + FCNews", "FCNews only"]:
+        for cat in fcnews_categories:
+            for item in llm.fetch_fcnews_news(cat, limit=8):
+                link = item.get("link", "")
+                title = item.get("title", "")
+                if not link or link in seen or not title:
+                    continue
+                item = dict(item)
+                item["design_source_category"] = cat
+                item["source_group"] = "FCNews"
+                rows.append(item)
+                seen.add(link)
+                if len(rows) >= limit and source_mode == "FCNews only":
+                    return rows
+    return rows[:limit]
+
+def build_source_keyword_comparison(items):
+    rows = []
+    for source in ["FCW", "FCNews"]:
+        sub = [i for i in items if i.get("source_group") == source]
+        if not sub:
+            continue
+        kdf = extract_design_keywords(sub)
+        for _, r in kdf.head(6).iterrows():
+            rows.append({"Source": source, "Keyword": r["Keyword"], "Mentions": r["Mentions"]})
+    return pd.DataFrame(rows)
+
+def collect_fcnews_guides():
+    guides = [
+        {"자료": "FCNews Home", "내용": "Floor Covering News 최신 기사", "링크": "https://www.fcnews.net/"},
+        {"자료": "Resilient", "내용": "LVT/SPC 포함 resilient 카테고리", "링크": "https://www.fcnews.net/category/news/resilient/"},
+        {"자료": "Wood", "내용": "우드 디자인/수종/컬러 트렌드", "링크": "https://www.fcnews.net/category/news/wood/"},
+        {"자료": "Tile", "내용": "스톤/타일 룩 디자인 레퍼런스", "링크": "https://www.fcnews.net/category/news/tile/"},
+        {"자료": "Technology", "내용": "디지털 프린팅/EIR/시각화 기술", "링크": "https://www.fcnews.net/category/news/technology/"},
+        {"자료": "LVT Selling Guide 2026", "내용": "FCNews supplement / guide watch", "링크": "https://www.fcnews.net/"},
+    ]
+    return pd.DataFrame(guides)
 
 def design_text_blob(items):
     return " ".join([f"{i.get('title','')} {i.get('summary','')}" for i in items]).lower()
@@ -2358,12 +2397,21 @@ elif menu == "🎯 Market Insight":
 # 🎨 DESIGN INTELLIGENCE
 # ════════════════════════════════════════════════════════════
 elif menu == "🎨 Design Intelligence":
-    st.markdown('<div class="sec"><span class="sec-t">Design Intelligence</span><span class="sec-s">미국 바닥재 디자인 트렌드 · 제품 레퍼런스</span><span class="live"><span class="dot"></span>FCW</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><span class="sec-t">Design Intelligence</span><span class="sec-s">미국 바닥재 디자인 트렌드 · 제품 레퍼런스</span><span class="live"><span class="dot"></span>FCW + FCNews</span></div>', unsafe_allow_html=True)
 
-    design_items = collect_design_articles(limit=18)
+    design_source_mode = st.radio(
+        "Design Source",
+        ["FCW + FCNews", "FCW only", "FCNews only"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="design_source_mode",
+    )
+    design_items = collect_design_articles(limit=24, source_mode=design_source_mode)
     keyword_df = extract_design_keywords(design_items)
     taxonomy_df = build_design_taxonomy(design_items)
     implication_df = build_product_implications(keyword_df)
+    source_keyword_df = build_source_keyword_comparison(design_items)
+    guide_df = collect_fcnews_guides()
 
     k1, k2, k3, k4 = st.columns(4)
     with k1:
@@ -2377,7 +2425,7 @@ elif menu == "🎨 Design Intelligence":
         pattern_top = taxonomy_df[taxonomy_df["Axis"] == "Pattern"].sort_values("Signal", ascending=False).iloc[0]
         st.metric("Pattern Signal", pattern_top["Trend Bucket"])
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">FCW Style / Product / Feature scan</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">FCW + FCNews scan</span></div><div class="p-body">', unsafe_allow_html=True)
     st.markdown(render_trend_pills(keyword_df), unsafe_allow_html=True)
     kw_col, tax_col = st.columns([1, 1], gap="medium")
     with kw_col:
@@ -2392,17 +2440,33 @@ elif menu == "🎨 Design Intelligence":
         fig_kw.update_layout(xaxis_title="Mentions", yaxis_title=None, showlegend=False)
         st.plotly_chart(fig_kw, use_container_width=True, config=CHART_CONFIG)
     with tax_col:
-        tax_pivot = taxonomy_df.sort_values(["Axis", "Signal"], ascending=[True, False]).groupby("Axis").head(4)
-        fig_tax = go.Figure(go.Bar(
-            x=tax_pivot["Signal"],
-            y=tax_pivot["Axis"] + " · " + tax_pivot["Trend Bucket"],
-            orientation="h",
-            marker_color=T["accent"],
-            hovertemplate="%{y}<br>Signal: %{x}<extra></extra>",
-        ))
-        chart_layout(fig_tax, 280)
-        fig_tax.update_layout(xaxis_title="Signal", yaxis_title=None, showlegend=False)
-        st.plotly_chart(fig_tax, use_container_width=True, config=CHART_CONFIG)
+        if len(source_keyword_df):
+            fig_src = go.Figure()
+            for source, color in [("FCW", T["accent"]), ("FCNews", GOLD)]:
+                sub = source_keyword_df[source_keyword_df["Source"] == source].head(6)
+                fig_src.add_trace(go.Bar(
+                    x=sub["Mentions"],
+                    y=sub["Keyword"],
+                    name=source,
+                    orientation="h",
+                    marker_color=color,
+                    hovertemplate=f"{source}<br>%{{y}}: %{{x}}<extra></extra>",
+                ))
+            chart_layout(fig_src, 280)
+            fig_src.update_layout(barmode="group", xaxis_title="Mentions", yaxis_title=None)
+            st.plotly_chart(fig_src, use_container_width=True, config=CHART_CONFIG)
+        else:
+            tax_pivot = taxonomy_df.sort_values(["Axis", "Signal"], ascending=[True, False]).groupby("Axis").head(4)
+            fig_tax = go.Figure(go.Bar(
+                x=tax_pivot["Signal"],
+                y=tax_pivot["Axis"] + " · " + tax_pivot["Trend Bucket"],
+                orientation="h",
+                marker_color=T["accent"],
+                hovertemplate="%{y}<br>Signal: %{x}<extra></extra>",
+            ))
+            chart_layout(fig_tax, 280)
+            fig_tax.update_layout(xaxis_title="Signal", yaxis_title=None, showlegend=False)
+            st.plotly_chart(fig_tax, use_container_width=True, config=CHART_CONFIG)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     article_col, insight_col = st.columns([1.45, 1], gap="medium")
@@ -2415,7 +2479,7 @@ elif menu == "🎨 Design Intelligence":
                 published = html.escape(item.get("published", "") or "Latest")
                 summary = html.escape(item.get("summary", ""))
                 image = html.escape(item.get("image", "") or "")
-                tag = html.escape(item.get("design_source_category", "Design"))
+                tag = html.escape(f'{item.get("source_group", "Source")} · {item.get("design_source_category", "Design")}')
                 media = f'<img src="{image}" alt="{title}" loading="lazy"/>' if image else f'<div class="fcw-fallback"><span>{tag}</span></div>'
                 summary_html = f'<div class="fcw-summary">{summary}</div>' if summary else ""
                 klass = "fcw-card featured" if featured else "fcw-card"
@@ -2440,6 +2504,12 @@ elif menu == "🎨 Design Intelligence":
         st.markdown(dataframe_to_dark_table(taxonomy_df.sort_values(["Axis", "Signal"], ascending=[True, False]).groupby("Axis").head(5)), unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">FCNews Guide Watch</span><span class="p-m">Supplements / category links</span></div><div class="p-body">', unsafe_allow_html=True)
+        guide_links = guide_df.copy()
+        guide_links["링크"] = guide_links["링크"].map(lambda x: f'<a href="{html.escape(x)}" target="_blank" rel="noopener noreferrer">Open</a>')
+        st.markdown(dataframe_to_dark_table(guide_links), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Product Implication</span><span class="p-m">KCC LVT lens</span></div><div class="p-body">', unsafe_allow_html=True)
         st.markdown(dataframe_to_dark_table(implication_df), unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
@@ -2455,8 +2525,10 @@ elif menu == "🎨 Design Intelligence":
         {
             "Design Articles": export_design,
             "Keyword Radar": keyword_df,
+            "Source Keyword Compare": source_keyword_df,
             "Material Color Pattern": taxonomy_df,
             "Product Implication": implication_df,
+            "FCNews Guide Watch": guide_df,
         },
         f"kcc_lvt_design_intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
         "design_intelligence_excel_download",

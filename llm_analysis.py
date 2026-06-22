@@ -32,6 +32,16 @@ FCW_URLS = {
     "Style & Design": "https://www.floorcoveringweekly.com/main/style-design",
 }
 
+FCNEWS_URLS = {
+    "Home": "https://www.fcnews.net/",
+    "Resilient": "https://www.fcnews.net/category/news/resilient/",
+    "Wood": "https://www.fcnews.net/category/news/wood/",
+    "Tile": "https://www.fcnews.net/category/news/tile/",
+    "Carpet": "https://www.fcnews.net/category/news/carpet/",
+    "Technology": "https://www.fcnews.net/category/news/technology/",
+    "Laminate": "https://www.fcnews.net/category/news/laminate/",
+}
+
 
 @st.cache_data(ttl=1800)  # 30분 캐시
 def fetch_news(category="freight", limit=8):
@@ -133,6 +143,85 @@ def fetch_fcw_news(category="All Latest", limit=12):
             break
 
     return items or [{"title": "표시할 FCW 기사를 찾지 못했습니다.", "link": url, "published": "", "summary": "", "source": "FCW"}]
+
+
+@st.cache_data(ttl=1800)
+def fetch_fcnews_news(category="Home", limit=12):
+    """Floor Covering News(fcnews.net) latest article list."""
+    url = FCNEWS_URLS.get(category, FCNEWS_URLS["Home"])
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+        )
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=12)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+    except Exception as e:
+        return [{"title": "FCNews 기사를 불러오지 못했습니다.", "link": url, "published": "", "summary": str(e), "image": "", "category": category, "source": "Floor Covering News"}]
+
+    skip_titles = {
+        "News", "Categories", "Category", "Videos", "Classifieds", "Archives",
+        "Advertise", "Subscribe", "Read more", "View More +", "More", "Search",
+        "Current Issue", "Supplements", "Events", "Featured articles",
+    }
+    article_re = re.compile(r"/\d{4}/\d{2}/\d{2}/")
+    items = []
+    seen = set()
+
+    def pick_image(container):
+        if not container:
+            return ""
+        img = container.find("img")
+        if not img:
+            return ""
+        for attr in ["data-src", "data-lazy-src", "src"]:
+            src = img.get(attr)
+            if src and not src.startswith("data:"):
+                return urljoin(url, src)
+        srcset = img.get("srcset", "")
+        if srcset:
+            first = srcset.split(",")[0].strip().split(" ")[0]
+            return urljoin(url, first)
+        return ""
+
+    def clean_summary(container, title):
+        if not container:
+            return ""
+        text = container.get_text(" ", strip=True)
+        text = text.replace(title, "", 1)
+        text = re.sub(r"Read more.*", "", text, flags=re.I)
+        text = re.sub(r"\s+", " ", text).strip(" -|")
+        return text[:220]
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(" ", strip=True)
+        href = a.get("href", "")
+        if not title or title in skip_titles or len(title) < 10:
+            continue
+        link = urljoin(url, href)
+        if not article_re.search(link) or link in seen:
+            continue
+        container = a.find_parent(["article", "div", "li", "section"]) or a.parent
+        text = container.get_text(" ", strip=True) if container else title
+        date_match = re.search(r"(January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}", text)
+        published = date_match.group(0) if date_match else ""
+        items.append({
+            "title": title,
+            "link": link,
+            "published": published,
+            "summary": clean_summary(container, title),
+            "image": pick_image(container),
+            "category": category,
+            "source": "Floor Covering News",
+        })
+        seen.add(link)
+        if len(items) >= limit:
+            break
+
+    return items or [{"title": "표시할 FCNews 기사를 찾지 못했습니다.", "link": url, "published": "", "summary": "", "image": "", "category": category, "source": "Floor Covering News"}]
 
 
 def _get_client(api_key):

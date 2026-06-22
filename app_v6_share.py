@@ -267,7 +267,7 @@ st.markdown(f"""
 .home-metric-c {{ color:rgba(255,255,255,.62); font-size:11px; margin-top:7px; }}
 .sparkline {{ width:100%; height:34px; margin-top:10px; display:block; }}
 .home-grid {{ display:grid; grid-template-columns:1.15fr .85fr; gap:14px; margin-bottom:14px; }}
-.home-entry-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:10px; }}
+.home-entry-grid {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:10px; }}
 .home-entry {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:142px; position:relative; overflow:hidden; transition:transform .15s ease, border-color .15s ease; }}
 .home-entry:hover {{ transform:translateY(-2px); border-color:{T['accent']}; }}
 .home-entry::after {{ content:""; position:absolute; right:-34px; top:-34px; width:92px; height:92px; border-radius:50%; background:color-mix(in srgb, {T['accent']} 16%, transparent); }}
@@ -285,6 +285,16 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
+.competitor-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }}
+.competitor-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px; min-height:126px; position:relative; overflow:hidden; }}
+.competitor-card::after {{ content:""; position:absolute; width:78px; height:78px; right:-28px; top:-26px; border-radius:50%; background:color-mix(in srgb,{T['accent']} 18%,transparent); }}
+.co-logo {{ width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:13px; letter-spacing:.5px; margin-bottom:10px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.16); }}
+.co-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:4px; }}
+.co-name {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:5px; }}
+.co-val {{ color:{T['text']}; font-size:22px; font-family:'SF Mono','Consolas',monospace; font-weight:900; line-height:1; }}
+.co-sub {{ color:{T['text2']}; font-size:11px; margin-top:7px; line-height:1.45; }}
+.co-note {{ color:{T['text3']}; font-size:11px; line-height:1.6; margin-bottom:12px; }}
+.co-pill {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; font-size:11px; font-weight:800; margin-right:6px; margin-bottom:6px; }}
 .board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
@@ -632,6 +642,234 @@ def get_market_insight_df():
         df[col] = pd.to_numeric(df.get(col), errors="coerce")
     df["state"] = df["state"].astype(str).str.upper()
     return df
+
+COMPETITOR_COLORS = {
+    "동신": "#0E2372", "일신": "#2354C6", "kdf": "#2D7FF9", "대진": "#15B86B",
+    "녹수": "#E8B339", "서한": "#7C3AED", "kte": "#F0454A", "LX하우시스": "#44546A",
+    "KCC": "#0B3D91", "유성": "#009CA6", "현태": "#6B7280", "재영": "#A16207",
+    "DSK": "#2563EB", "현대": "#64748B", "모림": "#9333EA", "Wellmark": "#0F766E",
+    "서해테크": "#B45309", "General DE": "#475569",
+}
+
+SUPPLIER_NAME_MAP = {
+    "daejin": "대진",
+    "dongshin-polymer": "동신",
+    "dsk": "DSK",
+    "hyundai": "현대",
+    "ilshin-chemical": "일신",
+    "jaeyoung": "재영",
+    "kcc-glass": "KCC",
+    "kdf": "kdf",
+    "kte": "kte",
+    "lx-hausys": "LX하우시스",
+    "moleem": "모림",
+    "nox": "녹수",
+    "seohae-tech": "서해테크",
+    "wellmark": "Wellmark",
+    "yousung-c-f": "유성",
+    "general-de-productos-exclusivos-s": "General DE",
+}
+
+def normalize_supplier_name(value):
+    key = str(value).strip().lower()
+    key = re.sub(r"\s+", "-", key)
+    return SUPPLIER_NAME_MAP.get(key, str(value).strip())
+
+def clean_importer_name(value):
+    text = str(value).strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace("United States of America", "")
+    text = text.replace("United States", "")
+    text = text.replace("Canada", "")
+    text = re.sub(r"\s+", " ", text).strip(" -,_")
+    return text or "Unknown"
+
+def company_badge(name):
+    label = str(name).strip()
+    if label.lower() == "kdf":
+        initials = "KDF"
+    elif label.lower() == "kte":
+        initials = "KTE"
+    elif "LX" in label.upper():
+        initials = "LX"
+    elif label.upper() == "KCC":
+        initials = "KCC"
+    else:
+        initials = label[:2].upper()
+    color = COMPETITOR_COLORS.get(label, NAVY)
+    return f'<div class="co-logo" style="background:{color}">{html.escape(initials)}</div>'
+
+def get_demo_competitor_export_df():
+    months = [f"2025-{m:02d}" for m in range(1, 13)] + ["2026-01"]
+    data = {
+        "동신": [292467, 133394, 401198, 297844, 2922429, 2932009, 2270563, 3859125, 3369668, 3201123, 2688604, 1595280, 2396704],
+        "일신": [0, 0, 0, 0, 0, 0, 3350198, 3463389, 2800604, 3168472, 3651254, 3195522, 2757251],
+        "kdf": [0, 0, 0, 0, 0, 380108, 1836829, 1885943, 1786803, 1805083, 1386097, 1609444, 774024],
+        "대진": [0, 0, 0, 0, 0, 731240, 773083, 773691, 625358, 739086, 947071, 966721, 194035],
+        "녹수": [55289, 50777, 165297, 134641, 1864256, 445700, 595354, 361038, 459888, 597151, 413890, 342408, 186114],
+        "서한": [396048, 37620, 79159, 295110, 309962, 257148, 421799, 202600, 625247, 260715, 551951, 609481, 111121],
+        "kte": [103230, 154200, 216445, 459031, 258898, 60587, 56762, 451622, 537380, 685278, 550872, 544902, 246642],
+        "LX하우시스": [0, 0, 0, 0, 0, 275758, 100564, 264910, 88930, 343900, 297190, 345700, 242640],
+        "KCC": [89768, 33487, 59559, 0, 0, 20952, 66176, 134318, 613143, 237702, 66176, 66058, 67160],
+        "유성": [34308, 14886, 0, 17173, 35866, 17163, 34326, 34326, 76640, 34326, 52879, 64598, 35283],
+        "현태": [0, 0, 0, 0, 0, 0, 51917, 0, 256991, 0, 0, 308908, 38776],
+        "재영": [31015, 0, 17500, 22300, 0, 0, 0, 0, 0, 0, 0, 70815, 0],
+    }
+    rows = []
+    for competitor, values in data.items():
+        for month, weight in zip(months, values):
+            rows.append({"competitor": competitor, "month": month, "weight_kg": float(weight)})
+    return pd.DataFrame(rows)
+
+def get_demo_competitor_destination_df():
+    rows = [
+        ("동신", "Artivo Floors Inc", "United States", "Savannah / Atlanta", 960197),
+        ("동신", "Dixie Home Carpets", "United States", "Charleston / Dalton", 612084),
+        ("동신", "Tandem Flooring LLC", "United States", "Los Angeles / CA", 277692),
+        ("일신", "Interior Logic Group", "United States", "Los Angeles / CA", 1680228),
+        ("일신", "Shaw Industries", "United States", "Savannah / GA", 1517002),
+        ("일신", "Nox Corporation", "United States", "New York / NJ", 1443794),
+        ("kdf", "Bestlaminate", "United States", "Chicago / IL", 711982),
+        ("kdf", "Dixie Home Carpets", "United States", "Savannah / GA", 670902),
+        ("kdf", "Beaulieu Canada", "Canada", "Vancouver / BC", 626100),
+        ("대진", "Happy Feet International", "United States", "Savannah / GA", 451294),
+        ("대진", "Raskin Industries", "United States", "New York / NY", 377000),
+        ("녹수", "Nox Corporation", "United States", "Savannah / GA", 412973),
+        ("녹수", "MSI Surfaces", "United States", "Los Angeles / CA", 303140),
+        ("서한", "Ohio Valley Flooring", "United States", "Cincinnati / OH", 497312),
+        ("kte", "Go Flooring", "United States", "Los Angeles / CA", 358921),
+        ("LX하우시스", "Newport Concepts", "United States", "New York / NJ", 446920),
+        ("KCC", "Raskin Industries", "United States", "New York / NY", 210380),
+        ("유성", "Adorn Floors", "United States", "Los Angeles / CA", 87652),
+        ("현태", "Hyundai L&C USA", "United States", "Atlanta / GA", 347684),
+    ]
+    return pd.DataFrame(rows, columns=["competitor", "importer", "country", "destination", "weight_kg"])
+
+def normalize_importyeti_raw_upload(uploaded):
+    sheets = pd.read_excel(uploaded, sheet_name=None)
+    required = {"date", "company", "weight", "supplier"}
+    selected = None
+    for _, df in sheets.items():
+        col_lookup = {str(c).strip().lower(): c for c in df.columns}
+        if required.issubset(set(col_lookup.keys())):
+            selected = df.rename(columns={v: k for k, v in col_lookup.items()})
+            break
+    if selected is None:
+        raise ValueError("ImportYeti raw 컬럼(date, company, weight, supplier)을 찾지 못했습니다.")
+
+    df = selected.copy()
+    for col in ["country", "route", "product_description", "bl_number", "quantity", "value"]:
+        if col not in df.columns:
+            df[col] = ""
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["month"] = df["date"].dt.strftime("%Y-%m")
+    df["weight_kg"] = pd.to_numeric(df["weight"], errors="coerce").fillna(0)
+    df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
+    df["competitor"] = df["supplier"].map(normalize_supplier_name)
+    df["importer"] = df["company"].map(clean_importer_name)
+    df["country"] = df["country"].astype(str).str.strip()
+    df["destination"] = df["route"].astype(str).str.strip().replace({"": "N/A", "nan": "N/A"})
+    df["product_description"] = df["product_description"].astype(str).str.strip()
+    df = df.dropna(subset=["date"])
+    df = df[(df["competitor"] != "") & (df["weight_kg"] > 0)]
+
+    monthly = (
+        df.groupby(["competitor", "month"], as_index=False)
+        .agg(weight_kg=("weight_kg", "sum"), shipments=("bl_number", "nunique"), quantity=("quantity", "sum"))
+    )
+    detail = (
+        df.groupby(["competitor", "importer", "country", "destination"], as_index=False)
+        .agg(weight_kg=("weight_kg", "sum"), shipments=("bl_number", "nunique"), quantity=("quantity", "sum"))
+        .sort_values("weight_kg", ascending=False)
+    )
+    product = (
+        df.groupby(["competitor", "product_description"], as_index=False)
+        .agg(weight_kg=("weight_kg", "sum"), shipments=("bl_number", "nunique"))
+        .sort_values("weight_kg", ascending=False)
+    )
+    return monthly, detail, product
+
+def parse_month_col(value):
+    text = str(value).strip()
+    m = re.search(r"(20\d{2})[-./_년 ]\s*(\d{1,2})", text)
+    if not m:
+        return None
+    return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}"
+
+def normalize_competitor_upload(uploaded):
+    raw = pd.read_excel(uploaded)
+    df = raw.copy()
+    company_col = None
+    for col in df.columns:
+        low = str(col).lower()
+        if any(k in low for k in ["업체", "회사", "company", "competitor"]):
+            company_col = col
+            break
+    if company_col is None:
+        company_col = df.columns[0]
+    month_cols = {col: parse_month_col(col) for col in df.columns}
+    month_cols = {col: month for col, month in month_cols.items() if month}
+    if not month_cols:
+        raise ValueError("월별 컬럼(예: 2025-01, 2025년 1월)을 찾지 못했습니다.")
+    clean = df[[company_col] + list(month_cols.keys())].copy()
+    clean = clean.rename(columns={company_col: "competitor", **month_cols})
+    long = clean.melt(id_vars="competitor", var_name="month", value_name="weight_kg")
+    long["competitor"] = long["competitor"].astype(str).str.strip()
+    long["weight_kg"] = pd.to_numeric(long["weight_kg"], errors="coerce").fillna(0)
+    long = long[(long["competitor"] != "") & (long["competitor"].str.lower() != "nan")]
+    return long[["competitor", "month", "weight_kg"]]
+
+def get_competitor_export_df():
+    if "competitor_export_rows" in st.session_state:
+        df = pd.DataFrame(st.session_state.competitor_export_rows)
+        if not df.empty:
+            df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce").fillna(0)
+            return df
+    return get_demo_competitor_export_df()
+
+def get_competitor_destination_df():
+    if "competitor_destination_rows" in st.session_state:
+        df = pd.DataFrame(st.session_state.competitor_destination_rows)
+        if not df.empty:
+            df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce").fillna(0)
+            for col in ["shipments", "quantity"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+            return df
+    return get_demo_competitor_destination_df()
+
+def get_competitor_product_df():
+    if "competitor_product_rows" in st.session_state:
+        df = pd.DataFrame(st.session_state.competitor_product_rows)
+        if not df.empty:
+            df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce").fillna(0)
+            if "shipments" in df.columns:
+                df["shipments"] = pd.to_numeric(df["shipments"], errors="coerce").fillna(0)
+            return df
+    return pd.DataFrame(columns=["competitor", "product_description", "weight_kg", "shipments"])
+
+def set_competitor_export_df(df):
+    clean = df.copy()
+    clean["weight_kg"] = pd.to_numeric(clean["weight_kg"], errors="coerce").fillna(0)
+    st.session_state.competitor_export_rows = clean[["competitor", "month", "weight_kg"]].to_dict("records")
+    return get_competitor_export_df()
+
+def set_competitor_export_data(monthly_df, detail_df=None, product_df=None):
+    clean = monthly_df.copy()
+    clean["weight_kg"] = pd.to_numeric(clean["weight_kg"], errors="coerce").fillna(0)
+    keep_cols = [c for c in ["competitor", "month", "weight_kg", "shipments", "quantity"] if c in clean.columns]
+    st.session_state.competitor_export_rows = clean[keep_cols].to_dict("records")
+    if detail_df is not None:
+        detail = detail_df.copy()
+        detail["weight_kg"] = pd.to_numeric(detail["weight_kg"], errors="coerce").fillna(0)
+        detail_cols = [c for c in ["competitor", "importer", "country", "destination", "weight_kg", "shipments", "quantity"] if c in detail.columns]
+        st.session_state.competitor_destination_rows = detail[detail_cols].to_dict("records")
+    if product_df is not None:
+        product = product_df.copy()
+        product["weight_kg"] = pd.to_numeric(product["weight_kg"], errors="coerce").fillna(0)
+        product_cols = [c for c in ["competitor", "product_description", "weight_kg", "shipments"] if c in product.columns]
+        st.session_state.competitor_product_rows = product[product_cols].to_dict("records")
+    return get_competitor_export_df()
 
 STATE_CENTERS = {
     "AL": (32.8067, -86.7911), "AZ": (33.7298, -111.4312), "CA": (36.1162, -119.6816),
@@ -1512,7 +1750,7 @@ with st.sidebar:
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
     menu = st.radio("", [
         "🏠 Home", "📊 Overview", "🛢 원자재", "🚢 Freight",
-        "🎯 Market Insight", "🎨 Design Intelligence", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
+        "🎯 Market Insight", "🏭 Competitor Export", "🎨 Design Intelligence", "📰 FCW News", "🏡 Housing", "📈 Macro", "💱 FX/Tariff"
     ], label_visibility="collapsed", key="main_menu")
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -1606,19 +1844,22 @@ if menu == "🏠 Home":
         st.markdown(f"""
         <div class="home-entry-grid">
           <div class="home-entry"><div class="home-entry-icon">📊</div><div class="home-entry-k">Sales</div><div class="home-entry-t">Market Overview</div><div class="home-entry-d">상부 보고와 영업 메시지에 필요한 핵심 지표 요약</div></div>
+          <div class="home-entry"><div class="home-entry-icon">🏭</div><div class="home-entry-k">Competition</div><div class="home-entry-t">Export Tracker</div><div class="home-entry-d">B/L Weight 기준 국내 경쟁사 미국 수출 동향 추정</div></div>
           <div class="home-entry"><div class="home-entry-icon">🚢</div><div class="home-entry-k">Logistics</div><div class="home-entry-t">Freight Monitor</div><div class="home-entry-d">SCFI/CCFI, 운임 뉴스, 선적 리스크 체크</div></div>
           <div class="home-entry"><div class="home-entry-icon">🎨</div><div class="home-entry-k">Design</div><div class="home-entry-t">Design Trend</div><div class="home-entry-d">FCW/FCNews 기반 디자인 키워드와 제품 적용 포인트</div></div>
           <div class="home-entry"><div class="home-entry-icon">🛢</div><div class="home-entry-k">Purchase</div><div class="home-entry-t">Raw Materials</div><div class="home-entry-d">PVC, DOTP, WTI, 환율 흐름과 전월/전년 비교</div></div>
         </div>
         """, unsafe_allow_html=True)
-        b1, b2, b3, b4 = st.columns(4)
+        b1, b2, b3, b4, b5 = st.columns(5)
         with b1:
             st.button("Overview", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_overview")
         with b2:
-            st.button("Freight", use_container_width=True, on_click=go_to_menu, args=("🚢 Freight",), key="home_to_freight")
+            st.button("경쟁사", use_container_width=True, on_click=go_to_menu, args=("🏭 Competitor Export",), key="home_to_competitor")
         with b3:
-            st.button("Design", use_container_width=True, on_click=go_to_menu, args=("🎨 Design Intelligence",), key="home_to_design")
+            st.button("Freight", use_container_width=True, on_click=go_to_menu, args=("🚢 Freight",), key="home_to_freight")
         with b4:
+            st.button("Design", use_container_width=True, on_click=go_to_menu, args=("🎨 Design Intelligence",), key="home_to_design")
+        with b5:
             st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
         st.markdown('</div></div>', unsafe_allow_html=True)
 
@@ -2713,6 +2954,190 @@ elif menu == "🎯 Market Insight":
         )
         st.caption("현재 데이터는 제공된 캡처에서 확인 가능한 항목 기준입니다. 원본 엑셀을 주면 순위와 매출값을 더 정확하게 정리할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 🏭 COMPETITOR EXPORT
+# ════════════════════════════════════════════════════════════
+elif menu == "🏭 Competitor Export":
+    st.markdown('<div class="sec"><span class="sec-t">Competitor Export Tracker</span><span class="sec-s">ImportYeti · B/L Weight 기준 국내 경쟁사 미국 수출동향 추정</span><span class="live"><span class="dot"></span>Demo ready</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="co-note">현재 화면은 캡처 기준 데모 데이터로 만든 뼈대입니다. 실제 원본 엑셀을 업로드하면 월별 경쟁사 Weight 흐름을 같은 화면에서 바로 분석하도록 연결할 수 있습니다. B/L Weight 기준이므로 매출액이나 실제 시장점유율이 아닌 방향성 추정치로 보는 것이 안전합니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("ImportYeti Excel Upload Center — 원본 파일 연결 준비"):
+        uploaded_competitor = st.file_uploader("경쟁사 월별 Weight 피벗 엑셀 업로드", type=["xlsx", "xls"], key="competitor_export_upload")
+        if uploaded_competitor is not None:
+            try:
+                monthly_df, detail_df, product_df = normalize_importyeti_raw_upload(uploaded_competitor)
+                set_competitor_export_data(monthly_df, detail_df, product_df)
+                st.success("ImportYeti raw 데이터를 현재 세션에 반영했습니다. 월별/수입자/제품 설명 집계를 자동 생성했습니다.")
+                st.rerun()
+            except Exception as e:
+                try:
+                    uploaded_competitor.seek(0)
+                    uploaded_df = normalize_competitor_upload(uploaded_competitor)
+                    set_competitor_export_df(uploaded_df)
+                    st.success("피벗형 월별 Weight 데이터를 현재 세션에 반영했습니다.")
+                    st.rerun()
+                except Exception as e2:
+                    st.error(f"업로드 파일 구조를 확인해주세요. Raw 오류: {e} / Pivot 오류: {e2}")
+        st.caption("Raw 권장 컬럼: date, company, weight, supplier, route, product_description. 피벗형 파일은 업체명 + 2025-01 같은 월별 Weight 컬럼도 지원합니다.")
+
+    df_comp = get_competitor_export_df()
+    df_dest = get_competitor_destination_df()
+    df_product = get_competitor_product_df()
+    months = sorted(df_comp["month"].dropna().unique().tolist())
+    competitors = sorted(df_comp["competitor"].dropna().unique().tolist())
+    f1, f2 = st.columns([1.2, 1], gap="medium")
+    with f1:
+        selected_competitors = st.multiselect(
+            "Competitors",
+            competitors,
+            default=competitors,
+            label_visibility="collapsed",
+            key="competitor_export_filter",
+        )
+    with f2:
+        selected_months = st.multiselect(
+            "Period",
+            months,
+            default=months[-13:] if len(months) > 13 else months,
+            label_visibility="collapsed",
+            key="competitor_export_period",
+        )
+    if not selected_competitors:
+        selected_competitors = competitors
+    if not selected_months:
+        selected_months = months
+
+    view = df_comp[df_comp["competitor"].isin(selected_competitors) & df_comp["month"].isin(selected_months)].copy()
+    dest_view = df_dest[df_dest["competitor"].isin(selected_competitors)].copy()
+    product_view = df_product[df_product["competitor"].isin(selected_competitors)].copy() if not df_product.empty else df_product.copy()
+    data_mode = "Uploaded raw" if "competitor_export_rows" in st.session_state else "Demo data"
+    total_weight = view["weight_kg"].sum()
+    total_shipments = view["shipments"].sum() if "shipments" in view.columns else 0
+    latest_month = max(selected_months) if selected_months else ""
+    latest_total = view[view["month"] == latest_month]["weight_kg"].sum() if latest_month else 0
+    top_summary = view.groupby("competitor", as_index=False)["weight_kg"].sum().sort_values("weight_kg", ascending=False)
+    top_name = top_summary.iloc[0]["competitor"] if len(top_summary) else "N/A"
+    top_weight = top_summary.iloc[0]["weight_kg"] if len(top_summary) else 0
+    dest_top = dest_view.sort_values("weight_kg", ascending=False).iloc[0]["importer"] if len(dest_view) else "N/A"
+
+    st.markdown(f"""
+    <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi"><div class="kpi-n">Total B/L Weight</div><div class="kpi-v">{total_weight:,.0f}</div><div class="kpi-c fl">kg · selected period</div></div>
+      <div class="kpi"><div class="kpi-n">Latest Month</div><div class="kpi-v">{latest_total:,.0f}</div><div class="kpi-c fl">{latest_month} · {data_mode}</div></div>
+      <div class="kpi"><div class="kpi-n">Top Competitor</div><div class="kpi-v">{html.escape(str(top_name))}</div><div class="kpi-c fl">{top_weight:,.0f} kg</div></div>
+      <div class="kpi"><div class="kpi-n">Top Importer</div><div class="kpi-v" style="font-size:16px">{html.escape(str(dest_top))}</div><div class="kpi-c fl">{total_shipments:,.0f} B/L count</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    card_html = ""
+    for _, row in top_summary.head(4).iterrows():
+        name = row["competitor"]
+        weight = row["weight_kg"]
+        share = (weight / total_weight * 100) if total_weight else 0
+        latest_weight = view[(view["competitor"] == name) & (view["month"] == latest_month)]["weight_kg"].sum()
+        card_html += (
+            f'<div class="competitor-card">{company_badge(name)}'
+            f'<div class="co-k">B/L Weight Leader</div>'
+            f'<div class="co-name">{html.escape(str(name))}</div>'
+            f'<div class="co-val">{weight:,.0f}</div>'
+            f'<div class="co-sub">Share {share:.1f}% · Latest {latest_weight:,.0f} kg</div>'
+            f'</div>'
+        )
+    st.markdown(f'<div class="competitor-grid">{card_html}</div>', unsafe_allow_html=True)
+
+    trend_col, share_col = st.columns([1.45, 1], gap="medium")
+    with trend_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Monthly Export Weight Trend</span><span class="p-m">Competitor by month</span></div><div class="p-body">', unsafe_allow_html=True)
+        fig_trend = go.Figure()
+        for name in top_summary.head(8)["competitor"].tolist():
+            sub = view[view["competitor"] == name].sort_values("month")
+            fig_trend.add_trace(go.Scatter(
+                x=sub["month"],
+                y=sub["weight_kg"],
+                name=name,
+                mode="lines+markers",
+                line=dict(width=2.4),
+                hovertemplate="%{x}<br>%{fullData.name}: %{y:,.0f} kg<extra></extra>",
+            ))
+        chart_layout(fig_trend, 330)
+        fig_trend.update_layout(xaxis_title=None, yaxis_title="Weight kg")
+        st.plotly_chart(fig_trend, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with share_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Competitor Share</span><span class="p-m">Selected period</span></div><div class="p-body">', unsafe_allow_html=True)
+        share_df = top_summary.head(10).sort_values("weight_kg")
+        fig_share = go.Figure(go.Bar(
+            x=share_df["weight_kg"],
+            y=share_df["competitor"],
+            orientation="h",
+            marker_color=GOLD,
+            hovertemplate="%{y}<br>Weight: %{x:,.0f} kg<extra></extra>",
+        ))
+        chart_layout(fig_share, 330)
+        fig_share.update_layout(xaxis_title="Weight kg", yaxis_title=None, showlegend=False)
+        st.plotly_chart(fig_share, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    heat_col, dest_col = st.columns([1.2, 1], gap="medium")
+    with heat_col:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Monthly Heatmap</span><span class="p-m">Weight concentration</span></div><div class="p-body">', unsafe_allow_html=True)
+        heat = view.pivot_table(index="competitor", columns="month", values="weight_kg", aggfunc="sum", fill_value=0)
+        heat = heat.reindex(top_summary["competitor"].tolist()).head(12)
+        fig_heat = go.Figure(go.Heatmap(
+            z=heat.values,
+            x=heat.columns,
+            y=heat.index,
+            colorscale=[[0, "#11161F"], [0.5, "#2D7FF9"], [1, "#E8B339"]],
+            hovertemplate="%{y}<br>%{x}: %{z:,.0f} kg<extra></extra>",
+            colorbar=dict(title="kg"),
+        ))
+        chart_layout(fig_heat, 360)
+        fig_heat.update_layout(xaxis_title=None, yaxis_title=None)
+        st.plotly_chart(fig_heat, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with dest_col:
+        st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Importer / Destination Detail</span><span class="p-m">{data_mode}</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(
+            "".join([
+                f'<span class="co-pill">{company_badge(c)}{html.escape(str(c))}</span>'
+                for c in top_summary.head(6)["competitor"].tolist()
+            ]),
+            unsafe_allow_html=True,
+        )
+        dest_table = dest_view.sort_values("weight_kg", ascending=False).head(14).copy()
+        st.markdown(dataframe_to_dark_table(dest_table), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    if not product_view.empty:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Product Description Signal</span><span class="p-m">Raw product text aggregation</span></div><div class="p-body">', unsafe_allow_html=True)
+        product_table = product_view.sort_values("weight_kg", ascending=False).head(20).copy()
+        st.markdown(dataframe_to_dark_table(product_table), unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Competitor Export Summary Table</span><span class="p-m">Pivot-style table</span></div><div class="p-body">', unsafe_allow_html=True)
+    summary_table = view.pivot_table(index="competitor", columns="month", values="weight_kg", aggfunc="sum", fill_value=0)
+    summary_table["합계"] = summary_table.sum(axis=1)
+    summary_table = summary_table.sort_values("합계", ascending=False).reset_index()
+    st.markdown(dataframe_to_dark_table(summary_table), unsafe_allow_html=True)
+    excel_download_button(
+        "📊 경쟁사 수출동향 엑셀 다운로드",
+        {
+            "Monthly Weight": view,
+            "Summary Pivot": summary_table,
+            "Importer Detail": dest_view,
+            "Product Description": product_view,
+        },
+        f"kcc_lvt_competitor_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        "competitor_export_excel_download",
+    )
+    st.caption("표현 기준: ImportYeti / 미국 항만 수입 B/L 데이터의 Weight 기준 추정치. 업체명 정규화, 누락 데이터, 중복 수입자명은 원본 엑셀 반영 단계에서 보정 예정입니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # 🎨 DESIGN INTELLIGENCE

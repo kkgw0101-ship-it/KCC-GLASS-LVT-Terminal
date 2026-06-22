@@ -16,6 +16,7 @@ import base64
 import html
 import json
 import re
+from urllib.parse import quote
 
 # .env 파일에서 API 키 자동 로드 (있으면 — 매번 set 안 해도 됨)
 try:
@@ -52,6 +53,20 @@ def _logo(path):
         return ""
 LOGO_WHITE = _logo("logo_white_t.png")  # 다크 헤더용 (항상 사용 - 헤더가 네이비)
 LOGO_NAVY  = _logo("logo_navy_t.png")   # 라이트 모드 대비용
+
+# ── 공식 ESG 리소스 링크 (PDF 파일은 앱에 저장하지 않고 공식 홈페이지 다운로드 URL만 연결) ──
+KCC_ESG_REPORT_PAGE_KO = "https://www.kccglass.co.kr/esgManagement/about/report.do"
+KCC_ESG_REPORT_PAGE_EN = "https://www.kccglass.co.kr/eng/esgManagement/about/report.do"
+
+def official_doc_url(file_name, file_real_name):
+    return (
+        "https://www.kccglass.co.kr/fileDownload.do?flag="
+        f"&filePath=/data/docs/{quote(file_name)}"
+        f"&fileNm={quote(file_real_name)}"
+    )
+
+KCC_ESG_LATEST_KO_URL = official_doc_url("ESG_REPORT_KCCGLASS_2024-2025_07_01.pdf", "ESG_보고서_KCCGLASS")
+KCC_ESG_LATEST_EN_URL = official_doc_url("ESG_REPORT_KCCGLASS_ENG_2024-2025_07_01.pdf", "ESG_REPORT_KCCGLASS_ENG")
 
 # ── 테마 상태 ─────────────────────────────────────────────────
 if "theme" not in st.session_state:
@@ -285,6 +300,16 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
+.esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,{T['panel2']} 88%,#0E2372),{T['panel']}); border:1px solid {T['border']}; border-radius:9px; padding:16px; position:relative; overflow:hidden; margin-bottom:12px; }}
+.esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:color-mix(in srgb,{T['up']} 18%,transparent); font-size:58px; font-weight:900; letter-spacing:-2px; }}
+.esg-k {{ color:{T['up']}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
+.esg-t {{ color:{T['text']}; font-size:18px; font-weight:900; margin-bottom:8px; }}
+.esg-d {{ color:{T['text2']}; font-size:12px; line-height:1.65; max-width:82%; margin-bottom:12px; }}
+.esg-tags {{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }}
+.esg-tag {{ border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; }}
+.esg-actions {{ display:flex; flex-wrap:wrap; gap:8px; }}
+.esg-btn {{ display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:8px 11px; border-radius:7px; background:{T['accent']}; color:#fff !important; font-size:12px; font-weight:900; text-decoration:none !important; }}
+.esg-btn.secondary {{ background:{T['panel2']}; color:{T['text']} !important; border:1px solid {T['border']}; }}
 .competitor-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }}
 .competitor-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px; min-height:126px; position:relative; overflow:hidden; }}
 .competitor-card::after {{ content:""; position:absolute; width:78px; height:78px; right:-28px; top:-26px; border-radius:50%; background:color-mix(in srgb,{T['accent']} 18%,transparent); }}
@@ -1897,6 +1922,32 @@ if menu == "🏠 Home":
     """, unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
+    st.markdown(
+        f"""
+        <div class="esg-card">
+          <div class="esg-k">Official Company Resource</div>
+          <div class="esg-t">KCC Glass ESG Resource</div>
+          <div class="esg-d">
+            최신 2024/25 ESG Report만 바로 연결하고, 과거 리포트는 공식 ESG 페이지에서 확인하도록 구성했습니다.
+            해외 고객 대응, 친환경 소재/공급망/지속가능성 메시지 참고용으로 활용하세요.
+          </div>
+          <div class="esg-tags">
+            <span class="esg-tag">Sustainable Life</span>
+            <span class="esg-tag">Environmental</span>
+            <span class="esg-tag">Supply Chain</span>
+            <span class="esg-tag">Customer Satisfaction</span>
+            <span class="esg-tag">Social Contribution</span>
+          </div>
+          <div class="esg-actions">
+            <a class="esg-btn" href="{KCC_ESG_LATEST_KO_URL}" target="_blank" rel="noopener noreferrer">2024/25 Korean Report</a>
+            <a class="esg-btn" href="{KCC_ESG_LATEST_EN_URL}" target="_blank" rel="noopener noreferrer">2024/25 English Report</a>
+            <a class="esg-btn secondary" href="{KCC_ESG_REPORT_PAGE_KO}" target="_blank" rel="noopener noreferrer">Official ESG Archive</a>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ════════════════════════════════════════════════════════════
 # 📊 OVERVIEW
 # ════════════════════════════════════════════════════════════
@@ -3327,6 +3378,23 @@ elif menu == "🎨 Design Intelligence":
         guide_links["링크"] = guide_links["링크"].map(lambda x: f'<a href="{html.escape(x)}" target="_blank" rel="noopener noreferrer">Open</a>')
         st.markdown(dataframe_to_dark_table(guide_links), unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
+
+        st.markdown(
+            f"""
+            <div class="esg-card">
+              <div class="esg-k">ESG Design Reference</div>
+              <div class="esg-t">친환경/지속가능성 메시지 참고</div>
+              <div class="esg-d">
+                해외 고객 대응이나 디자인 콘셉트 검토 시, 회사 공식 ESG 리포트의 환경·공급망·고객만족 메시지를 함께 참고할 수 있습니다.
+              </div>
+              <div class="esg-actions">
+                <a class="esg-btn" href="{KCC_ESG_LATEST_EN_URL}" target="_blank" rel="noopener noreferrer">English ESG Report</a>
+                <a class="esg-btn secondary" href="{KCC_ESG_REPORT_PAGE_EN}" target="_blank" rel="noopener noreferrer">Official ESG Page</a>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Product Implication</span><span class="p-m">KCC LVT lens</span></div><div class="p-body">', unsafe_allow_html=True)
         st.markdown(dataframe_to_dark_table(implication_df), unsafe_allow_html=True)

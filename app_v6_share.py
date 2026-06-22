@@ -1985,6 +1985,13 @@ df_mortgage = get_fred('MORTGAGE30US', '모기지금리')
 df_cpi      = get_fred('CPIAUCSL',     'CPI')
 df_fedfunds = get_fred('FEDFUNDS',     '기준금리')
 df_newsales = get_fred('HSN1F',        '신규주택판매')
+df_permits  = get_fred('PERMIT',       '건축허가')
+df_complete = get_fred('COMPUTSA',     '주택완공')
+df_month_supply = get_fred('MSACSR',   '신규주택재고개월')
+df_existing_sales = get_fred('EXHOSLUSM495S', '기존주택판매')
+df_building_retail = get_fred('MRTSSM4441USN', '건자재유통매출')
+df_lumber_ppi = get_fred('WPU081',     'Lumber PPI')
+df_building_ppi = get_fred('PCU44414441', '건자재유통PPI')
 df_wti      = get_fred('DCOILWTICO',    'WTI')
 df_brent    = get_fred('DCOILBRENTEU',  'Brent')
 df_fx       = get_fred('DEXKOUS',       'USD/KRW')
@@ -1998,6 +2005,13 @@ v_housing  = latest(df_housing,  '주택착공')
 v_mortgage = latest(df_mortgage, '모기지금리')
 v_cpi      = latest(df_cpi,      'CPI')
 v_fedfunds = latest(df_fedfunds, '기준금리')
+v_permits  = latest(df_permits,  '건축허가')
+v_complete = latest(df_complete, '주택완공')
+v_supply   = latest(df_month_supply, '신규주택재고개월')
+v_existing = latest(df_existing_sales, '기존주택판매')
+v_building_retail = latest(df_building_retail, '건자재유통매출')
+v_lumber_ppi = latest(df_lumber_ppi, 'Lumber PPI')
+v_building_ppi = latest(df_building_ppi, '건자재유통PPI')
 v_wti      = latest(df_wti,      'WTI')
 v_brent    = latest(df_brent,    'Brent')
 v_fx_hist  = latest(df_fx,       'USD/KRW')
@@ -2008,6 +2022,13 @@ v_ccfi     = latest(df_freight,  'CCFI')
 d_housing  = delta_pct(df_housing,  '주택착공')
 d_mortgage = delta_pct(df_mortgage, '모기지금리')
 d_cpi      = delta_pct(df_cpi,      'CPI')
+d_permits  = delta_pct(df_permits,  '건축허가')
+d_complete = delta_pct(df_complete, '주택완공')
+d_supply   = delta_pct(df_month_supply, '신규주택재고개월')
+d_existing = delta_pct(df_existing_sales, '기존주택판매')
+d_building_retail = delta_pct(df_building_retail, '건자재유통매출')
+d_lumber_ppi = delta_pct(df_lumber_ppi, 'Lumber PPI')
+d_building_ppi = delta_pct(df_building_ppi, '건자재유통PPI')
 d_wti      = delta_pct(df_wti,      'WTI')
 d_brent    = delta_pct(df_brent,    'Brent')
 d_fx       = delta_pct(df_fx,       'USD/KRW', periods=20)
@@ -2719,6 +2740,9 @@ elif menu == "📊 Overview":
     report_metrics = [
         ["Housing Starts", f"{v_housing:,.0f}K", f"{d_housing:+.1f}% MoM"],
         ["New Home Sales", f"{v_newsales:,.0f}K", "월간 발표"],
+        ["Building Permits", f"{v_permits:,.0f}K", f"{d_permits:+.1f}% MoM"],
+        ["Housing Completions", f"{v_complete:,.0f}K", f"{d_complete:+.1f}% MoM"],
+        ["Monthly Supply", f"{v_supply:.1f}개월", f"{d_supply:+.1f}% MoM"],
         ["30Y Mortgage", f"{v_mortgage:.2f}%", f"{d_mortgage:+.2f}%p"],
         ["CPI Index", f"{v_cpi:.1f}", f"{d_cpi:+.1f}%"],
         ["Fed Funds", f"{v_fedfunds:.2f}%", "정책금리"],
@@ -2789,9 +2813,16 @@ elif menu == "📊 Overview":
             "📊 전체 지표 엑셀 다운로드",
             {
                 "Housing": df_housing,
+                "Building Permits": df_permits,
+                "Housing Completions": df_complete,
+                "Monthly Supply": df_month_supply,
+                "Existing Home Sales": df_existing_sales,
                 "Mortgage": df_mortgage,
                 "New Home Sales": df_newsales,
                 "Macro": df_cpi.merge(df_fedfunds, on="date", how="outer"),
+                "Building Retail Sales": df_building_retail,
+                "Lumber PPI": df_lumber_ppi,
+                "Building Material PPI": df_building_ppi,
                 "FX": df_fx,
                 "Oil": df_wti.merge(df_brent, on="date", how="outer"),
                 "PVC_DOTP": df_purchase[["월", "PVC", "DOTP"]],
@@ -2953,10 +2984,29 @@ elif menu == "🛢 원자재":
             "yoy": fmt_change(pct_change(current, py)),
         }
 
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">미국 자재 가격 보조 지표</span><span class="p-m">Lumber / Building Material PPI</span></div><div class="p-body">', unsafe_allow_html=True)
+    fig_aux = go.Figure()
+    fig_aux.add_trace(go.Scatter(
+        x=df_lumber_ppi["date"], y=df_lumber_ppi["Lumber PPI"], name="Lumber PPI",
+        line=dict(color=GOLD, width=2),
+        hovertemplate="%{x|%Y-%m-%d}<br>Lumber PPI: %{y:,.1f}<extra></extra>",
+    ))
+    fig_aux.add_trace(go.Scatter(
+        x=df_building_ppi["date"], y=df_building_ppi["건자재유통PPI"], name="Building Material PPI",
+        line=dict(color=T["accent"], width=2, dash="dot"),
+        hovertemplate="%{x|%Y-%m-%d}<br>Building Material PPI: %{y:,.1f}<extra></extra>",
+    ))
+    chart_layout(fig_aux, 260)
+    st.plotly_chart(fig_aux, use_container_width=True, config=CHART_CONFIG)
+    st.caption("PVC/DOTP 직접 대체 지표는 아니며, 미국 건축·자재 가격 압력의 방향성을 보는 참고 지표입니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     raw_rows = [
         raw_compare_row("WTI 원유", df_wti, "WTI", "$/bbl", 1),
         raw_compare_row("Brent 원유", df_brent, "Brent", "$/bbl", 1),
         raw_compare_row("USD/KRW", df_fx, "USD/KRW", "KRW/USD", 0, current_override=usd_krw),
+        raw_compare_row("Lumber PPI", df_lumber_ppi, "Lumber PPI", "Index", 1),
+        raw_compare_row("Building Material PPI", df_building_ppi, "건자재유통PPI", "Index", 1),
     ]
     raw_table = build_market_compare_rows(raw_rows)
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">원자재 핵심 지표 비교표</span><span class="p-m">Current vs 1M / 1Y</span></div><div class="p-body">', unsafe_allow_html=True)
@@ -2980,6 +3030,8 @@ elif menu == "🛢 원자재":
         {
             "PVC_DOTP": df_purchase[["월", "PVC", "DOTP"]],
             "Oil": df_wti.merge(df_brent, on="date", how="outer"),
+            "Lumber PPI": df_lumber_ppi,
+            "Building Material PPI": df_building_ppi,
             "FX": df_fx,
         },
         f"kcc_lvt_raw_materials_{datetime.now().strftime('%Y%m%d')}.xlsx",
@@ -4271,24 +4323,78 @@ elif menu == "📰 FCW News":
 # 🏡 HOUSING
 # ════════════════════════════════════════════════════════════
 elif menu == "🏡 Housing":
-    st.markdown('<div class="sec"><span class="sec-t">US Housing Market</span><span class="sec-s">주택착공 · 신규주택판매 · 모기지 금리</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Starts & New Home Sales</span><span class="p-m">2019–Present</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><span class="sec-t">US Housing Market</span><span class="sec-s">허가 · 착공 · 완공 · 판매 · 재고</span></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="kpi-strip" style="grid-template-columns:repeat(5,1fr);">
+      <div class="kpi"><div class="kpi-n">Permits</div><div class="kpi-v">{v_permits:,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div>{kpi_change(d_permits)}</div>
+      <div class="kpi"><div class="kpi-n">Starts</div><div class="kpi-v">{v_housing:,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div>{kpi_change(d_housing)}</div>
+      <div class="kpi"><div class="kpi-n">Completions</div><div class="kpi-v">{v_complete:,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div>{kpi_change(d_complete)}</div>
+      <div class="kpi"><div class="kpi-n">Existing Sales</div><div class="kpi-v">{v_existing:,.2f}</div>{kpi_change(d_existing)}</div>
+      <div class="kpi"><div class="kpi-n">Monthly Supply</div><div class="kpi-v">{v_supply:.1f}</div>{kpi_change(d_supply)}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Pipeline</span><span class="p-m">Permits → Starts → Completions</span></div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_permits["date"], y=df_permits["건축허가"], name="Building Permits (K)",
+        line=dict(color="#7AA7FF", width=2),
+        hovertemplate="%{x|%Y-%m-%d}<br>Permits: %{y:,.0f}K<extra></extra>",
+    ))
     fig.add_trace(go.Scatter(
         x=df_housing["date"], y=df_housing["주택착공"], name="Housing Starts (K)",
         line=dict(color=T['accent'], width=2),
         hovertemplate="%{x|%Y-%m-%d}<br>Housing Starts: %{y:,.0f}K<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=df_newsales["date"], y=df_newsales["신규주택판매"], name="New Home Sales (K)",
+        x=df_complete["date"], y=df_complete["주택완공"], name="Completions (K)",
         line=dict(color=GOLD, width=2),
-        hovertemplate="%{x|%Y-%m-%d}<br>New Home Sales: %{y:,.0f}K<extra></extra>",
+        hovertemplate="%{x|%Y-%m-%d}<br>Completions: %{y:,.0f}K<extra></extra>",
     ))
     chart_layout(fig, 320)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    c_sales, c_supply = st.columns([1.2, 1], gap="medium")
+    with c_sales:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Home Sales Signal</span><span class="p-m">New vs Existing</span></div><div class="p-body">', unsafe_allow_html=True)
+        fig_sales_home = go.Figure()
+        fig_sales_home.add_trace(go.Scatter(
+            x=df_newsales["date"], y=df_newsales["신규주택판매"], name="New Home Sales (K)",
+            line=dict(color=GOLD, width=2),
+            hovertemplate="%{x|%Y-%m-%d}<br>New Home Sales: %{y:,.0f}K<extra></extra>",
+        ))
+        fig_sales_home.add_trace(go.Scatter(
+            x=df_existing_sales["date"], y=df_existing_sales["기존주택판매"], name="Existing Home Sales", yaxis="y2",
+            line=dict(color=T["up"], width=2, dash="dot"),
+            hovertemplate="%{x|%Y-%m-%d}<br>Existing Sales: %{y:,.2f}<extra></extra>",
+        ))
+        fig_sales_home.update_layout(yaxis2=dict(overlaying="y", side="right", gridcolor='rgba(0,0,0,0)'))
+        chart_layout(fig_sales_home, 280)
+        st.plotly_chart(fig_sales_home, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+    with c_supply:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">New Home Inventory Pressure</span><span class="p-m">Monthly supply</span></div><div class="p-body">', unsafe_allow_html=True)
+        fig_supply = go.Figure(go.Scatter(
+            x=df_month_supply["date"], y=df_month_supply["신규주택재고개월"], name="Monthly Supply",
+            line=dict(color=T["down"], width=2.5),
+            fill="tozeroy",
+            fillcolor="rgba(240,69,74,0.08)",
+            hovertemplate="%{x|%Y-%m-%d}<br>Monthly Supply: %{y:.1f} months<extra></extra>",
+        ))
+        chart_layout(fig_supply, 280)
+        fig_supply.update_layout(showlegend=False)
+        st.plotly_chart(fig_supply, use_container_width=True, config=CHART_CONFIG)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Indicator Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-body">', unsafe_allow_html=True)
     housing_rows = [
+        indicator_compare_row("Building Permits", df_permits, "건축허가", "K", 0),
         indicator_compare_row("Housing Starts", df_housing, "주택착공", "K", 0),
+        indicator_compare_row("Housing Completions", df_complete, "주택완공", "K", 0),
         indicator_compare_row("New Home Sales", df_newsales, "신규주택판매", "K", 0),
+        indicator_compare_row("Existing Home Sales", df_existing_sales, "기존주택판매", "-", 2),
+        indicator_compare_row("Monthly Supply", df_month_supply, "신규주택재고개월", "months", 1),
         indicator_compare_row("30Y Mortgage", df_mortgage, "모기지금리", "%", 2),
     ]
     st.markdown(
@@ -4310,7 +4416,11 @@ elif menu == "🏡 Housing":
         "📊 Housing 데이터 엑셀 다운로드",
         {
             "Housing Starts": df_housing,
+            "Building Permits": df_permits,
+            "Housing Completions": df_complete,
             "New Home Sales": df_newsales,
+            "Existing Home Sales": df_existing_sales,
+            "Monthly Supply": df_month_supply,
             "Mortgage": df_mortgage,
         },
         f"kcc_lvt_housing_{datetime.now().strftime('%Y%m%d')}.xlsx",
@@ -4322,7 +4432,15 @@ elif menu == "🏡 Housing":
 # 📈 MACRO
 # ════════════════════════════════════════════════════════════
 elif menu == "📈 Macro":
-    st.markdown('<div class="sec"><span class="sec-t">Macro Indicators</span><span class="sec-s">CPI · 기준금리</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><span class="sec-t">Macro Indicators</span><span class="sec-s">CPI · 금리 · 건자재 유통 · 자재 가격</span></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi"><div class="kpi-n">CPI</div><div class="kpi-v">{v_cpi:.1f}</div>{kpi_change(d_cpi)}</div>
+      <div class="kpi"><div class="kpi-n">Fed Funds</div><div class="kpi-v">{v_fedfunds:.2f}<span style="font-size:12px;color:{T['text3']}">%</span></div><div class="kpi-c fl">policy</div></div>
+      <div class="kpi"><div class="kpi-n">Building Retail Sales</div><div class="kpi-v">{v_building_retail:,.0f}</div>{kpi_change(d_building_retail)}</div>
+      <div class="kpi"><div class="kpi-n">Lumber PPI</div><div class="kpi-v">{v_lumber_ppi:.1f}</div>{kpi_change(d_lumber_ppi)}</div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">CPI & Fed Funds Rate</span><span class="p-m">2019–Present</span></div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -4357,11 +4475,73 @@ elif menu == "📈 Macro":
         unsafe_allow_html=True,
     )
     st.caption("전월/전년 값은 해당 기준일 이전의 가장 가까운 발표값 기준입니다.")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    macro_c1, macro_c2 = st.columns([1.15, 1], gap="medium")
+    with macro_c1:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Building Materials Retail Sales</span><span class="p-m">Demand proxy</span></div><div class="p-body">', unsafe_allow_html=True)
+        fig_retail = go.Figure(go.Scatter(
+            x=df_building_retail["date"],
+            y=df_building_retail["건자재유통매출"],
+            name="Building Materials Retail Sales",
+            line=dict(color=T["up"], width=2.4),
+            fill="tozeroy",
+            fillcolor="rgba(21,184,107,0.08)",
+            hovertemplate="%{x|%Y-%m-%d}<br>Retail Sales: %{y:,.1f}<extra></extra>",
+        ))
+        chart_layout(fig_retail, 280)
+        fig_retail.update_layout(showlegend=False)
+        st.plotly_chart(fig_retail, use_container_width=True, config=CHART_CONFIG)
+        st.caption("건자재/자재 유통 채널의 매출 흐름으로 홈센터·리모델링 수요 분위기를 보조적으로 확인합니다.")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+    with macro_c2:
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Material Price Pressure</span><span class="p-m">PPI signals</span></div><div class="p-body">', unsafe_allow_html=True)
+        fig_ppi = go.Figure()
+        fig_ppi.add_trace(go.Scatter(
+            x=df_lumber_ppi["date"], y=df_lumber_ppi["Lumber PPI"], name="Lumber PPI",
+            line=dict(color=GOLD, width=2),
+            hovertemplate="%{x|%Y-%m-%d}<br>Lumber PPI: %{y:,.1f}<extra></extra>",
+        ))
+        fig_ppi.add_trace(go.Scatter(
+            x=df_building_ppi["date"], y=df_building_ppi["건자재유통PPI"], name="Building Material PPI",
+            line=dict(color=T["accent"], width=2, dash="dot"),
+            hovertemplate="%{x|%Y-%m-%d}<br>Building Material PPI: %{y:,.1f}<extra></extra>",
+        ))
+        chart_layout(fig_ppi, 280)
+        st.plotly_chart(fig_ppi, use_container_width=True, config=CHART_CONFIG)
+        st.caption("LVT 직접 원료는 아니지만, 미국 건축/자재 가격 압박을 읽는 보조 지표로 활용합니다.")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Macro Extended Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-body">', unsafe_allow_html=True)
+    extended_macro_rows = [
+        indicator_compare_row("CPI", df_cpi, "CPI", "-", 2),
+        indicator_compare_row("Fed Funds", df_fedfunds, "기준금리", "%", 2),
+        indicator_compare_row("Building Materials Retail Sales", df_building_retail, "건자재유통매출", "-", 1),
+        indicator_compare_row("Lumber PPI", df_lumber_ppi, "Lumber PPI", "-", 1),
+        indicator_compare_row("Building Material PPI", df_building_ppi, "건자재유통PPI", "-", 1),
+    ]
+    st.markdown(
+        f"""
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>지표</th><th>단위</th><th>기준일</th><th>현재</th>
+              <th>전월</th><th>전월대비</th><th>전년</th><th>전년대비</th>
+            </tr>
+          </thead>
+          <tbody>{build_market_compare_rows(extended_macro_rows)}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
     excel_download_button(
         "📊 Macro 데이터 엑셀 다운로드",
         {
             "CPI": df_cpi,
             "Fed Funds": df_fedfunds,
+            "Building Retail Sales": df_building_retail,
+            "Lumber PPI": df_lumber_ppi,
+            "Building Material PPI": df_building_ppi,
         },
         f"kcc_lvt_macro_{datetime.now().strftime('%Y%m%d')}.xlsx",
         "macro_excel_download",

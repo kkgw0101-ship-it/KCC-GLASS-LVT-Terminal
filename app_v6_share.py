@@ -68,6 +68,29 @@ def official_doc_url(file_name, file_real_name):
 KCC_ESG_LATEST_KO_URL = official_doc_url("ESG_REPORT_KCCGLASS_2024-2025_07_01.pdf", "ESG_보고서_KCCGLASS")
 KCC_ESG_LATEST_EN_URL = official_doc_url("ESG_REPORT_KCCGLASS_ENG_2024-2025_07_01.pdf", "ESG_REPORT_KCCGLASS_ENG")
 
+ESG_SUMMARY_ITEMS = [
+    {
+        "axis": "Environment",
+        "message": "환경·안전·보건 체계를 중심으로 사업장 운영과 제품 전 과정에서 지속가능성 리스크를 관리합니다.",
+        "use": "친환경 소재, 저탄소 운영, 안전한 제조 기반을 고객 커뮤니케이션의 신뢰 포인트로 활용",
+    },
+    {
+        "axis": "Supply Chain",
+        "message": "지속가능한 공급망 관리 관점에서 협력사와의 책임 있는 조달 및 품질 안정성을 강조합니다.",
+        "use": "미국 바이어의 공급망/ESG 질문 대응 시 안정적 파트너십 근거로 활용",
+    },
+    {
+        "axis": "Customer Satisfaction",
+        "message": "품질, 서비스, 고객만족 경영을 ESG 체계 안에서 함께 관리하는 구조를 제시합니다.",
+        "use": "LVT 제안 시 품질관리와 사후 대응 체계를 회사 신뢰자료로 연결",
+    },
+    {
+        "axis": "Social Contribution",
+        "message": "지역사회, 임직원, 이해관계자와 함께하는 지속가능한 성장 방향을 제시합니다.",
+        "use": "대외 제안서나 회사 소개 자료에서 기업 책임/브랜드 신뢰 메시지로 활용",
+    },
+]
+
 # ── 테마 상태 ─────────────────────────────────────────────────
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
@@ -300,16 +323,21 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
-.esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,{T['panel2']} 88%,#0E2372),{T['panel']}); border:1px solid {T['border']}; border-radius:9px; padding:16px; position:relative; overflow:hidden; margin-bottom:12px; }}
-.esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:color-mix(in srgb,{T['up']} 18%,transparent); font-size:58px; font-weight:900; letter-spacing:-2px; }}
-.esg-k {{ color:{T['up']}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
+.esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,#0B3D2E 72%,{T['panel2']}),color-mix(in srgb,#10281F 58%,{T['panel']})); border:1px solid color-mix(in srgb,#22C55E 42%,{T['border']}); border-radius:9px; padding:17px; position:relative; overflow:hidden; margin-bottom:12px; box-shadow:0 18px 42px rgba(0,0,0,.12); }}
+.esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:rgba(34,197,94,.18); font-size:58px; font-weight:900; letter-spacing:-2px; }}
+.esg-k {{ color:#4ADE80; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .esg-t {{ color:{T['text']}; font-size:18px; font-weight:900; margin-bottom:8px; }}
 .esg-d {{ color:{T['text2']}; font-size:12px; line-height:1.65; max-width:82%; margin-bottom:12px; }}
 .esg-tags {{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }}
-.esg-tag {{ border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; }}
+.esg-tag {{ border:1px solid rgba(74,222,128,.26); background:rgba(20,83,45,.28); color:#B7F7C9; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; }}
 .esg-actions {{ display:flex; flex-wrap:wrap; gap:8px; }}
-.esg-btn {{ display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:8px 11px; border-radius:7px; background:{T['accent']}; color:#fff !important; font-size:12px; font-weight:900; text-decoration:none !important; }}
-.esg-btn.secondary {{ background:{T['panel2']}; color:{T['text']} !important; border:1px solid {T['border']}; }}
+.esg-btn {{ display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:8px 11px; border-radius:7px; background:#16A34A; color:#fff !important; font-size:12px; font-weight:900; text-decoration:none !important; }}
+.esg-btn.secondary {{ background:rgba(15,23,34,.35); color:#E4E9F0 !important; border:1px solid rgba(74,222,128,.26); }}
+.esg-summary-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; margin:12px 0; position:relative; z-index:1; }}
+.esg-summary-card {{ background:rgba(8,29,22,.42); border:1px solid rgba(74,222,128,.18); border-radius:8px; padding:11px; min-height:132px; }}
+.esg-summary-k {{ color:#86EFAC; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; margin-bottom:7px; }}
+.esg-summary-v {{ color:#EEF8F1; font-size:12px; line-height:1.55; margin-bottom:7px; }}
+.esg-summary-u {{ color:#A7BDB0; font-size:11px; line-height:1.5; }}
 .competitor-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }}
 .competitor-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px; min-height:126px; position:relative; overflow:hidden; }}
 .competitor-card::after {{ content:""; position:absolute; width:78px; height:78px; right:-28px; top:-26px; border-radius:50%; background:color-mix(in srgb,{T['accent']} 18%,transparent); }}
@@ -390,6 +418,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-content {{ padding:30px 24px; }}
   .home-title {{ font-size:34px; }}
   .home-metrics, .home-entry-grid, .home-signal-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
 }}
 </style>
@@ -1928,8 +1957,8 @@ if menu == "🏠 Home":
           <div class="esg-k">Official Company Resource</div>
           <div class="esg-t">KCC Glass ESG Resource</div>
           <div class="esg-d">
-            최신 2024/25 ESG Report만 바로 연결하고, 과거 리포트는 공식 ESG 페이지에서 확인하도록 구성했습니다.
-            해외 고객 대응, 친환경 소재/공급망/지속가능성 메시지 참고용으로 활용하세요.
+            최신 2024/25 ESG Report를 업무용 관점으로 압축했습니다.
+            PDF 원문은 공식 링크로 열고, 아래 요약은 해외 고객 대응과 내부 참고용 quick brief로 활용하세요.
           </div>
           <div class="esg-tags">
             <span class="esg-tag">Sustainable Life</span>
@@ -1937,6 +1966,12 @@ if menu == "🏠 Home":
             <span class="esg-tag">Supply Chain</span>
             <span class="esg-tag">Customer Satisfaction</span>
             <span class="esg-tag">Social Contribution</span>
+          </div>
+          <div class="esg-summary-grid">
+            {''.join([
+                f'<div class="esg-summary-card"><div class="esg-summary-k">{html.escape(item["axis"])}</div><div class="esg-summary-v">{html.escape(item["message"])}</div><div class="esg-summary-u">{html.escape(item["use"])}</div></div>'
+                for item in ESG_SUMMARY_ITEMS
+            ])}
           </div>
           <div class="esg-actions">
             <a class="esg-btn" href="{KCC_ESG_LATEST_KO_URL}" target="_blank" rel="noopener noreferrer">2024/25 Korean Report</a>
@@ -3386,6 +3421,11 @@ elif menu == "🎨 Design Intelligence":
               <div class="esg-t">친환경/지속가능성 메시지 참고</div>
               <div class="esg-d">
                 해외 고객 대응이나 디자인 콘셉트 검토 시, 회사 공식 ESG 리포트의 환경·공급망·고객만족 메시지를 함께 참고할 수 있습니다.
+              </div>
+              <div class="esg-tags">
+                <span class="esg-tag">친환경 소재 스토리</span>
+                <span class="esg-tag">공급망 신뢰</span>
+                <span class="esg-tag">고객 제안 문구</span>
               </div>
               <div class="esg-actions">
                 <a class="esg-btn" href="{KCC_ESG_LATEST_EN_URL}" target="_blank" rel="noopener noreferrer">English ESG Report</a>

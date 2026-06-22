@@ -3568,6 +3568,13 @@ elif menu == "🗺 Account Map":
         map_col, focus_col = st.columns([1.7, 1], gap="medium")
         with map_col:
             st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US / Canada Account Footprint</span><span class="p-m">Pins by account · hover for detail</span></div><div class="p-body">', unsafe_allow_html=True)
+            map_view_mode = st.radio(
+                "Map View",
+                ["3D Perspective", "2D Region Map"],
+                horizontal=True,
+                label_visibility="collapsed",
+                key="account_map_view_mode",
+            )
             if mapped.empty:
                 st.markdown('<div class="placeholder"><span style="font-size:26px">📍</span><span>좌표로 배치 가능한 거래선이 없습니다</span></div>', unsafe_allow_html=True)
             else:
@@ -3579,70 +3586,131 @@ elif menu == "🗺 Account Map":
                     "Google Places Lead": "#A78BFA",
                     "Uploaded Lead": "#A78BFA",
                 }
-                fig_accounts = go.Figure()
-                for cat in sorted(mapped["category"].dropna().unique()):
-                    sub = mapped[mapped["category"] == cat].copy()
-                    size_base = pd.to_numeric(sub["sales"], errors="coerce").fillna(0)
-                    size = (size_base.rank(pct=True).fillna(0.4) * 16 + 7).clip(8, 24)
-                    fig_accounts.add_trace(go.Scattergeo(
-                        lon=sub["lon"],
-                        lat=sub["lat"],
-                        mode="markers",
-                        name=str(cat),
-                        text=sub["company"],
-                        customdata=sub[["source", "country", "state", "home_base", "sales", "notes"]],
-                        marker=dict(
-                            size=size,
-                            color=category_colors.get(cat, "#7AA7FF"),
-                            opacity=0.82,
-                            line=dict(color="#FFFFFF", width=0.8),
-                        ),
-                        hovertemplate=(
-                            "<b>%{text}</b><br>"
-                            "%{customdata[0]} · %{customdata[1]} %{customdata[2]}<br>"
-                            "%{customdata[3]}<br>"
-                            "Scale: %{customdata[4]:,.0f}<br>"
-                            "%{customdata[5]}<extra></extra>"
-                        ),
-                    ))
                 label_regions = region_summary[region_summary["state"].isin(REGION_CENTERS.keys())].copy()
                 if not label_regions.empty:
                     label_regions["lat"] = label_regions["state"].map(lambda s: REGION_CENTERS.get(s, (None, None))[0])
                     label_regions["lon"] = label_regions["state"].map(lambda s: REGION_CENTERS.get(s, (None, None))[1])
-                    fig_accounts.add_trace(go.Scattergeo(
-                        lon=label_regions["lon"],
-                        lat=label_regions["lat"],
-                        text=label_regions["state"] + " · " + label_regions["accounts"].astype(str),
-                        mode="text",
-                        textfont=dict(color="#FFFFFF", size=fs(9), family="Arial Black"),
-                        hoverinfo="skip",
-                        showlegend=False,
-                    ))
-                geo_kwargs = dict(
-                    scope="north america",
-                    projection_type="mercator",
-                    bgcolor="rgba(0,0,0,0)",
-                    landcolor=T["panel2"],
-                    lakecolor=T["bg"],
-                    oceancolor=T["bg"],
-                    showcountries=True,
-                    countrycolor=T["border"],
-                    showsubunits=True,
-                    subunitcolor=T["border"],
-                    showocean=True,
-                )
-                if focused_region != "All Regions" and focused_region in REGION_CENTERS:
-                    lat, lon = REGION_CENTERS[focused_region]
-                    geo_kwargs.update(center=dict(lat=lat, lon=lon), projection_scale=4.6)
+
+                if map_view_mode == "3D Perspective":
+                    fig_accounts = go.Figure()
+                    for cat in sorted(mapped["category"].dropna().unique()):
+                        sub = mapped[mapped["category"] == cat].copy()
+                        size_base = pd.to_numeric(sub["sales"], errors="coerce").fillna(0)
+                        size = (size_base.rank(pct=True).fillna(0.4) * 16 + 9).clip(10, 28)
+                        fig_accounts.add_trace(go.Scattermapbox(
+                            lon=sub["lon"],
+                            lat=sub["lat"],
+                            mode="markers",
+                            name=str(cat),
+                            text=sub["company"],
+                            customdata=sub[["source", "country", "state", "home_base", "sales", "notes"]],
+                            marker=dict(
+                                size=size,
+                                color=category_colors.get(cat, "#7AA7FF"),
+                                opacity=0.88,
+                            ),
+                            hovertemplate=(
+                                "<b>%{text}</b><br>"
+                                "%{customdata[0]} · %{customdata[1]} %{customdata[2]}<br>"
+                                "%{customdata[3]}<br>"
+                                "Scale: %{customdata[4]:,.0f}<br>"
+                                "%{customdata[5]}<extra></extra>"
+                            ),
+                        ))
+                    if not label_regions.empty:
+                        fig_accounts.add_trace(go.Scattermapbox(
+                            lon=label_regions["lon"],
+                            lat=label_regions["lat"],
+                            text=label_regions["state"] + " · " + label_regions["accounts"].astype(str),
+                            mode="text",
+                            textfont=dict(color="#FFFFFF" if st.session_state.theme == "dark" else "#0F1722", size=fs(10), family="Arial Black"),
+                            hoverinfo="skip",
+                            showlegend=False,
+                        ))
+                    if focused_region != "All Regions" and focused_region in REGION_CENTERS:
+                        center_lat, center_lon = REGION_CENTERS[focused_region]
+                        zoom = 5.25
+                    else:
+                        center_lat, center_lon, zoom = 43.5, -96.0, 2.85
+                    mapbox_style = "carto-darkmatter" if st.session_state.theme == "dark" else "carto-positron"
+                    fig_accounts.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color=T['text2'], size=11),
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        height=560,
+                        mapbox=dict(
+                            style=mapbox_style,
+                            center=dict(lat=center_lat, lon=center_lon),
+                            zoom=zoom,
+                            pitch=48,
+                            bearing=-18,
+                        ),
+                        legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.18)"),
+                        hoverlabel=dict(bgcolor=T['panel2'], bordercolor=T['accent'], font=dict(color=T['text'], size=fs(12))),
+                    )
                 else:
-                    geo_kwargs.update(center=dict(lat=44, lon=-98), projection_scale=1.45)
-                fig_accounts.update_geos(**geo_kwargs)
-                chart_layout(fig_accounts, 560)
-                fig_accounts.update_layout(
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.15)"),
-                    hovermode="closest",
-                )
+                    fig_accounts = go.Figure()
+                    for cat in sorted(mapped["category"].dropna().unique()):
+                        sub = mapped[mapped["category"] == cat].copy()
+                        size_base = pd.to_numeric(sub["sales"], errors="coerce").fillna(0)
+                        size = (size_base.rank(pct=True).fillna(0.4) * 16 + 7).clip(8, 24)
+                        fig_accounts.add_trace(go.Scattergeo(
+                            lon=sub["lon"],
+                            lat=sub["lat"],
+                            mode="markers",
+                            name=str(cat),
+                            text=sub["company"],
+                            customdata=sub[["source", "country", "state", "home_base", "sales", "notes"]],
+                            marker=dict(
+                                size=size,
+                                color=category_colors.get(cat, "#7AA7FF"),
+                                opacity=0.82,
+                                line=dict(color="#FFFFFF", width=0.8),
+                            ),
+                            hovertemplate=(
+                                "<b>%{text}</b><br>"
+                                "%{customdata[0]} · %{customdata[1]} %{customdata[2]}<br>"
+                                "%{customdata[3]}<br>"
+                                "Scale: %{customdata[4]:,.0f}<br>"
+                                "%{customdata[5]}<extra></extra>"
+                            ),
+                        ))
+                    if not label_regions.empty:
+                        fig_accounts.add_trace(go.Scattergeo(
+                            lon=label_regions["lon"],
+                            lat=label_regions["lat"],
+                            text=label_regions["state"] + " · " + label_regions["accounts"].astype(str),
+                            mode="text",
+                            textfont=dict(color="#FFFFFF", size=fs(9), family="Arial Black"),
+                            hoverinfo="skip",
+                            showlegend=False,
+                        ))
+                    geo_kwargs = dict(
+                        scope="north america",
+                        projection_type="mercator",
+                        bgcolor="rgba(0,0,0,0)",
+                        landcolor=T["panel2"],
+                        lakecolor=T["bg"],
+                        oceancolor=T["bg"],
+                        showcountries=True,
+                        countrycolor=T["border"],
+                        showsubunits=True,
+                        subunitcolor=T["border"],
+                        showocean=True,
+                    )
+                    if focused_region != "All Regions" and focused_region in REGION_CENTERS:
+                        lat, lon = REGION_CENTERS[focused_region]
+                        geo_kwargs.update(center=dict(lat=lat, lon=lon), projection_scale=4.6)
+                    else:
+                        geo_kwargs.update(center=dict(lat=44, lon=-98), projection_scale=1.45)
+                    fig_accounts.update_geos(**geo_kwargs)
+                    chart_layout(fig_accounts, 560)
+                    fig_accounts.update_layout(
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.15)"),
+                        hovermode="closest",
+                    )
                 st.plotly_chart(fig_accounts, use_container_width=True, config=CHART_CONFIG)
             st.markdown('</div></div>', unsafe_allow_html=True)
 

@@ -239,26 +239,39 @@ st.markdown(f"""
 .watch-k {{ color:{T['text3']}; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; }}
 .watch-v {{ color:{T['text']}; font-size:19px; font-family:'SF Mono','Consolas',monospace; font-weight:800; line-height:1.1; }}
 .watch-c {{ color:{T['text2']}; font-size:11px; margin-top:6px; }}
-.home-hero {{ position:relative; min-height:520px; border-radius:14px; overflow:hidden; margin-bottom:16px;
+.home-hero {{ position:relative; min-height:540px; border-radius:14px; overflow:hidden; margin-bottom:16px;
   background-image:linear-gradient(90deg,rgba(7,11,18,.92) 0%,rgba(7,11,18,.66) 43%,rgba(7,11,18,.20) 100%),
   url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1900&q=80');
   background-size:cover; background-position:center; border:1px solid {T['border']}; box-shadow:0 24px 80px rgba(0,0,0,.25); }}
 .home-hero::after {{ content:""; position:absolute; inset:-35%; background:linear-gradient(115deg,transparent 0%,rgba(255,255,255,.12) 47%,transparent 54%);
-  transform:translateX(-36%); animation:homeSweep 8s ease-in-out infinite; pointer-events:none; }}
+  transform:translateX(-36%); animation:homeSweep 8s ease-in-out infinite; pointer-events:none; z-index:1; }}
 @keyframes homeSweep {{ 0%,34%{{transform:translateX(-42%)}} 62%{{transform:translateX(42%)}} 100%{{transform:translateX(42%)}} }}
-.home-content {{ position:relative; z-index:1; padding:42px 46px; max-width:980px; }}
+.home-bg {{ position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; animation:homeSlide 24s infinite; transform:scale(1.04); }}
+.home-bg:nth-child(1) {{ background-image:linear-gradient(90deg,rgba(7,11,18,.94),rgba(7,11,18,.62),rgba(7,11,18,.18)), url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1900&q=80'); animation-delay:0s; }}
+.home-bg:nth-child(2) {{ background-image:linear-gradient(90deg,rgba(7,11,18,.94),rgba(7,11,18,.62),rgba(7,11,18,.18)), url('https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1900&q=80'); animation-delay:6s; }}
+.home-bg:nth-child(3) {{ background-image:linear-gradient(90deg,rgba(7,11,18,.94),rgba(7,11,18,.62),rgba(7,11,18,.18)), url('https://images.unsplash.com/photo-1494412519320-aa613dfb7738?auto=format&fit=crop&w=1900&q=80'); animation-delay:12s; }}
+.home-bg:nth-child(4) {{ background-image:linear-gradient(90deg,rgba(7,11,18,.94),rgba(7,11,18,.62),rgba(7,11,18,.18)), url('https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1900&q=80'); animation-delay:18s; }}
+@keyframes homeSlide {{ 0%{{opacity:0; transform:scale(1.04)}} 7%{{opacity:1}} 27%{{opacity:1; transform:scale(1)}} 34%{{opacity:0}} 100%{{opacity:0}} }}
+.home-content {{ position:relative; z-index:2; padding:42px 46px; max-width:1040px; }}
 .home-logo {{ height:34px; margin-bottom:42px; }}
 .home-eyebrow {{ color:{GOLD}; font-size:12px; font-weight:900; letter-spacing:1.8px; text-transform:uppercase; margin-bottom:12px; }}
 .home-title {{ color:#fff; font-size:48px; line-height:1.04; font-weight:900; letter-spacing:0; max-width:760px; margin-bottom:18px; }}
 .home-copy {{ color:rgba(255,255,255,.78); font-size:15px; line-height:1.75; max-width:720px; margin-bottom:28px; }}
+.home-insight {{ display:inline-flex; align-items:center; gap:9px; max-width:890px; padding:12px 15px; margin-bottom:18px;
+  border:1px solid rgba(232,179,57,.38); border-radius:999px; background:rgba(14,35,114,.34); color:#fff; font-size:13px; line-height:1.45; backdrop-filter:blur(10px); }}
+.home-insight-badge {{ color:#101827; background:{GOLD}; border-radius:999px; padding:4px 8px; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; white-space:nowrap; }}
 .home-metrics {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; max-width:860px; }}
-.home-metric {{ background:rgba(12,18,29,.72); border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:13px 14px; backdrop-filter:blur(8px); }}
+.home-metric {{ background:rgba(12,18,29,.76); border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:13px 14px; backdrop-filter:blur(8px); min-height:128px; }}
 .home-metric-k {{ color:rgba(255,255,255,.58); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:6px; }}
 .home-metric-v {{ color:#fff; font-family:'SF Mono','Consolas',monospace; font-size:23px; font-weight:900; line-height:1; }}
 .home-metric-c {{ color:rgba(255,255,255,.62); font-size:11px; margin-top:7px; }}
+.sparkline {{ width:100%; height:34px; margin-top:10px; display:block; }}
 .home-grid {{ display:grid; grid-template-columns:1.15fr .85fr; gap:14px; margin-bottom:14px; }}
 .home-entry-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:10px; }}
-.home-entry {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:116px; }}
+.home-entry {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:142px; position:relative; overflow:hidden; transition:transform .15s ease, border-color .15s ease; }}
+.home-entry:hover {{ transform:translateY(-2px); border-color:{T['accent']}; }}
+.home-entry::after {{ content:""; position:absolute; right:-34px; top:-34px; width:92px; height:92px; border-radius:50%; background:color-mix(in srgb, {T['accent']} 16%, transparent); }}
+.home-entry-icon {{ width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:{NAVY}; color:#fff; font-size:19px; margin-bottom:11px; }}
 .home-entry-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:9px; }}
 .home-entry-t {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:8px; }}
 .home-entry-d {{ color:{T['text2']}; font-size:12px; line-height:1.55; }}
@@ -266,6 +279,12 @@ st.markdown(f"""
 .home-signal {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:108px; }}
 .home-signal-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:7px; }}
 .home-signal-v {{ color:{T['text']}; font-size:13px; line-height:1.65; }}
+.home-report-card {{ margin-top:10px; padding:18px; border-radius:10px; border:1px solid color-mix(in srgb, {GOLD} 48%, {T['border']});
+  background:linear-gradient(135deg,color-mix(in srgb,{NAVY} 86%,#000),color-mix(in srgb,{T['panel2']} 80%,#000)); position:relative; overflow:hidden; }}
+.home-report-card::after {{ content:"PDF"; position:absolute; right:18px; top:14px; color:rgba(255,255,255,.08); font-size:58px; font-weight:900; letter-spacing:-2px; }}
+.home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
+.home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
+.home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
 .board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
@@ -1448,6 +1467,40 @@ CHART_CONFIG = {
     },
 }
 
+def home_sparkline(df, col, color="#E8B339", points=24):
+    try:
+        values = pd.to_numeric(df[col], errors="coerce").dropna().tail(points).tolist()
+        if len(values) < 2:
+            return '<svg class="sparkline" viewBox="0 0 140 34"></svg>'
+        width, height, pad = 140, 34, 3
+        low, high = min(values), max(values)
+        span = high - low if high != low else 1
+        coords = []
+        for i, value in enumerate(values):
+            x = pad + (width - pad * 2) * i / (len(values) - 1)
+            y = height - pad - ((value - low) / span) * (height - pad * 2)
+            coords.append(f"{x:.1f},{y:.1f}")
+        area = f"{pad},{height-pad} " + " ".join(coords) + f" {width-pad},{height-pad}"
+        return (
+            f'<svg class="sparkline" viewBox="0 0 {width} {height}" preserveAspectRatio="none">'
+            f'<polygon points="{area}" fill="{color}" opacity="0.13"></polygon>'
+            f'<polyline points="{" ".join(coords)}" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></polyline>'
+            f'<circle cx="{coords[-1].split(",")[0]}" cy="{coords[-1].split(",")[1]}" r="2.6" fill="{color}"></circle>'
+            f'</svg>'
+        )
+    except Exception:
+        return '<svg class="sparkline" viewBox="0 0 140 34"></svg>'
+
+def build_home_insight(summary, alerts, d_fx, d_scfi, d_pvc, d_dotp):
+    if alerts:
+        top = alerts[0]
+        return f"{top['title']}가 {top['value']} 수준입니다. {top['message']}"
+    if d_scfi >= 8 and d_fx >= 1:
+        return "운임과 환율이 동시에 상승 흐름입니다. 신규 견적은 유효기간과 비용 전가 타이밍을 짧게 관리하는 편이 좋습니다."
+    if d_pvc >= 5 or d_dotp >= 5:
+        return "PVC/DOTP 구매 지수가 올라오고 있습니다. 원가 반영 필요성과 고객별 가격 민감도를 함께 점검하세요."
+    return summary["headline"]
+
 # ════════════════════════════════════════════════════════════
 # 사이드바
 # ════════════════════════════════════════════════════════════
@@ -1516,9 +1569,18 @@ if menu == "🏠 Home":
     )
     home_alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
     top_alert = home_alerts[0] if home_alerts else {"title": "Normal", "value": "OK", "message": "주요 임계값 초과 항목은 없습니다."}
+    home_insight = build_home_insight(home_summary, home_alerts, d_fx, d_scfi, d_pvc, d_dotp)
+    fx_spark = home_sparkline(df_fx, "USD/KRW", GOLD)
+    scfi_spark = home_sparkline(df_freight, "SCFI", "#4ADE80")
+    wti_spark = home_sparkline(df_wti, "WTI", "#FF6B6E")
+    mtg_spark = home_sparkline(df_mortgage, "모기지금리", "#7AA7FF")
     hero_logo = f'<img class="home-logo" src="data:image/png;base64,{LOGO_WHITE}"/>' if LOGO_WHITE else '<div class="home-logo" style="color:#fff;font-weight:900;font-size:24px">KCC GLASS</div>'
     st.markdown(f"""
     <section class="home-hero">
+      <div class="home-bg"></div>
+      <div class="home-bg"></div>
+      <div class="home-bg"></div>
+      <div class="home-bg"></div>
       <div class="home-content">
         {hero_logo}
         <div class="home-eyebrow">Global LVT Market Intelligence Platform</div>
@@ -1527,11 +1589,12 @@ if menu == "🏠 Home":
           영업, 물류, 구매, 디자인팀이 같은 시장 지표와 뉴스를 보고 의사결정할 수 있도록 만든
           KCC Glass 해외영업 통합 인텔리전스 터미널입니다.
         </div>
+        <div class="home-insight"><span class="home-insight-badge">Today Insight</span><span>{html.escape(home_insight)}</span></div>
         <div class="home-metrics">
-          <div class="home-metric"><div class="home-metric-k">USD/KRW</div><div class="home-metric-v">{usd_krw:,.0f}</div><div class="home-metric-c">환율 모니터링</div></div>
-          <div class="home-metric"><div class="home-metric-k">SCFI</div><div class="home-metric-v">{v_scfi:,.0f}</div><div class="home-metric-c">4주 {d_scfi:+.1f}%</div></div>
-          <div class="home-metric"><div class="home-metric-k">WTI</div><div class="home-metric-v">{v_wti:.1f}</div><div class="home-metric-c">원자재 비용 신호</div></div>
-          <div class="home-metric"><div class="home-metric-k">30Y Mortgage</div><div class="home-metric-v">{v_mortgage:.2f}%</div><div class="home-metric-c">수요 심리 지표</div></div>
+          <div class="home-metric"><div class="home-metric-k">USD/KRW</div><div class="home-metric-v">{usd_krw:,.0f}</div><div class="home-metric-c">20거래일 {d_fx:+.1f}%</div>{fx_spark}</div>
+          <div class="home-metric"><div class="home-metric-k">SCFI</div><div class="home-metric-v">{v_scfi:,.0f}</div><div class="home-metric-c">4주 {d_scfi:+.1f}%</div>{scfi_spark}</div>
+          <div class="home-metric"><div class="home-metric-k">WTI</div><div class="home-metric-v">{v_wti:.1f}</div><div class="home-metric-c">원자재 비용 신호</div>{wti_spark}</div>
+          <div class="home-metric"><div class="home-metric-k">30Y Mortgage</div><div class="home-metric-v">{v_mortgage:.2f}%</div><div class="home-metric-c">수요 심리 지표</div>{mtg_spark}</div>
         </div>
       </div>
     </section>
@@ -1542,10 +1605,10 @@ if menu == "🏠 Home":
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Team Entry</span><span class="p-m">Choose your workflow</span></div><div class="p-body">', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="home-entry-grid">
-          <div class="home-entry"><div class="home-entry-k">Sales</div><div class="home-entry-t">Market Overview</div><div class="home-entry-d">상부 보고와 영업 메시지에 필요한 핵심 지표 요약</div></div>
-          <div class="home-entry"><div class="home-entry-k">Logistics</div><div class="home-entry-t">Freight Monitor</div><div class="home-entry-d">SCFI/CCFI, 운임 뉴스, 선적 리스크 체크</div></div>
-          <div class="home-entry"><div class="home-entry-k">Design</div><div class="home-entry-t">Design Trend</div><div class="home-entry-d">FCW/FCNews 기반 디자인 키워드와 제품 적용 포인트</div></div>
-          <div class="home-entry"><div class="home-entry-k">Purchase</div><div class="home-entry-t">Raw Materials</div><div class="home-entry-d">PVC, DOTP, WTI, 환율 흐름과 전월/전년 비교</div></div>
+          <div class="home-entry"><div class="home-entry-icon">📊</div><div class="home-entry-k">Sales</div><div class="home-entry-t">Market Overview</div><div class="home-entry-d">상부 보고와 영업 메시지에 필요한 핵심 지표 요약</div></div>
+          <div class="home-entry"><div class="home-entry-icon">🚢</div><div class="home-entry-k">Logistics</div><div class="home-entry-t">Freight Monitor</div><div class="home-entry-d">SCFI/CCFI, 운임 뉴스, 선적 리스크 체크</div></div>
+          <div class="home-entry"><div class="home-entry-icon">🎨</div><div class="home-entry-k">Design</div><div class="home-entry-t">Design Trend</div><div class="home-entry-d">FCW/FCNews 기반 디자인 키워드와 제품 적용 포인트</div></div>
+          <div class="home-entry"><div class="home-entry-icon">🛢</div><div class="home-entry-k">Purchase</div><div class="home-entry-t">Raw Materials</div><div class="home-entry-d">PVC, DOTP, WTI, 환율 흐름과 전월/전년 비교</div></div>
         </div>
         """, unsafe_allow_html=True)
         b1, b2, b3, b4 = st.columns(4)
@@ -1565,7 +1628,12 @@ if menu == "🏠 Home":
         <div class="home-signal-grid">
           <div class="home-signal"><div class="home-signal-k">Headline</div><div class="home-signal-v">{html.escape(home_summary["headline"])}</div></div>
           <div class="home-signal"><div class="home-signal-k">Top Risk</div><div class="home-signal-v">{html.escape(top_alert["title"])} {html.escape(top_alert["value"])}<br>{html.escape(top_alert["message"])}</div></div>
-          <div class="home-signal"><div class="home-signal-k">Monthly Report</div><div class="home-signal-v">Overview에서 1페이지 보고서와 월간 종합 PDF를 바로 다운로드할 수 있습니다.</div></div>
+          <div class="home-signal"><div class="home-signal-k">Next Move</div><div class="home-signal-v">Overview에서 실행 액션, 경고 신호, AI 브리핑을 함께 확인하세요.</div></div>
+        </div>
+        <div class="home-report-card">
+          <div class="home-report-k">Executive Report</div>
+          <div class="home-report-t">이번 달 보고서 생성</div>
+          <div class="home-report-d">Overview · Freight · Raw Materials · Design Trend를 묶은 월간 종합 PDF를 바로 내려받을 수 있습니다.</div>
         </div>
         """, unsafe_allow_html=True)
         st.button("월간 PDF 보고서로 이동", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_report")

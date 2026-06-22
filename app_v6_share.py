@@ -361,6 +361,12 @@ st.markdown(f"""
 .co-sub {{ color:{T['text2']}; font-size:11px; margin-top:7px; line-height:1.45; }}
 .co-note {{ color:{T['text3']}; font-size:11px; line-height:1.6; margin-bottom:12px; }}
 .co-pill {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; font-size:11px; font-weight:800; margin-right:6px; margin-bottom:6px; }}
+.account-source-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }}
+.account-source {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px; min-height:96px; }}
+.account-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:7px; }}
+.account-v {{ color:{T['text']}; font-size:19px; font-family:'SF Mono','Consolas',monospace; font-weight:900; line-height:1.1; }}
+.account-c {{ color:{T['text2']}; font-size:12px; line-height:1.5; margin-top:7px; }}
+.account-chip {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; font-size:11px; font-weight:800; margin-right:6px; margin-bottom:6px; }}
 .upload-done {{ background:color-mix(in srgb,{T['up']} 14%,{T['panel2']}); border:1px solid color-mix(in srgb,{T['up']} 42%,{T['border']}); border-left:4px solid {T['up']}; border-radius:8px; padding:14px 16px; margin:10px 0 14px 0; }}
 .upload-done-t {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:7px; }}
 .upload-done-d {{ color:{T['text2']}; font-size:12px; line-height:1.6; }}
@@ -960,6 +966,169 @@ STATE_CENTERS = {
     "TN": (35.7478, -86.6923), "TX": (31.0545, -97.5635), "UT": (40.1500, -111.8624),
     "VA": (37.7693, -78.1700), "WA": (47.4009, -121.4905), "WI": (44.2685, -89.6165),
 }
+CANADA_PROVINCE_CENTERS = {
+    "AB": (53.9333, -116.5765), "BC": (53.7267, -127.6476), "MB": (53.7609, -98.8139),
+    "NB": (46.5653, -66.4619), "NL": (53.1355, -57.6604), "NS": (44.6820, -63.7443),
+    "NT": (64.8255, -124.8457), "NU": (70.2998, -83.1076), "ON": (51.2538, -85.3232),
+    "PE": (46.5107, -63.4168), "QC": (52.9399, -73.5491), "SK": (52.9399, -106.4509),
+    "YT": (64.2823, -135.0000),
+}
+REGION_CENTERS = {**STATE_CENTERS, **CANADA_PROVINCE_CENTERS}
+US_STATE_CODES = set(STATE_CENTERS.keys())
+CA_PROVINCE_CODES = set(CANADA_PROVINCE_CENTERS.keys())
+
+def infer_region_from_text(value):
+    text = str(value or "").upper()
+    codes = re.findall(r"\b[A-Z]{2}\b", text)
+    for code in reversed(codes):
+        if code in REGION_CENTERS:
+            return code
+    return ""
+
+def infer_country_from_region(region):
+    if region in CA_PROVINCE_CODES:
+        return "Canada"
+    if region in US_STATE_CODES:
+        return "United States"
+    return "Unknown"
+
+def account_jitter(company, region, index=0):
+    seed = sum(ord(ch) for ch in f"{company}-{region}-{index}")
+    lat_offset = ((seed % 17) - 8) * 0.055
+    lon_offset = (((seed // 17) % 17) - 8) * 0.075
+    return lat_offset, lon_offset
+
+def normalize_account_upload(uploaded):
+    raw = pd.read_excel(uploaded)
+    if raw.empty:
+        return pd.DataFrame()
+    lookup = {str(c).strip().lower(): c for c in raw.columns}
+    aliases = {
+        "company": ["company", "업체명", "거래선", "account", "name", "customer", "고객사"],
+        "category": ["category", "구분", "분류", "type", "채널"],
+        "country": ["country", "국가"],
+        "state": ["state", "province", "주", "지역", "state/province"],
+        "city": ["city", "도시"],
+        "home_base": ["home_base", "home base", "address", "location", "주소", "소재지"],
+        "website": ["website", "url", "web", "홈페이지"],
+        "notes": ["notes", "note", "메모", "비고"],
+        "lat": ["lat", "latitude", "위도"],
+        "lon": ["lon", "lng", "longitude", "경도"],
+    }
+    def pick(name):
+        for alias in aliases[name]:
+            if alias.lower() in lookup:
+                return lookup[alias.lower()]
+        return None
+
+    company_col = pick("company") or raw.columns[0]
+    out = pd.DataFrame()
+    out["company"] = raw[company_col].astype(str).str.strip()
+    out = out[(out["company"] != "") & (out["company"].str.lower() != "nan")]
+    for target in ["category", "country", "state", "city", "home_base", "website", "notes", "lat", "lon"]:
+        col = pick(target)
+        out[target] = raw.loc[out.index, col] if col else ""
+    out["category"] = out["category"].replace("", "Uploaded Lead").fillna("Uploaded Lead")
+    out["type"] = out["category"]
+    out["source"] = "Uploaded Excel"
+    out["state"] = out.apply(
+        lambda r: str(r["state"]).strip().upper() if str(r["state"]).strip() else infer_region_from_text(f'{r["home_base"]} {r["city"]}'),
+        axis=1,
+    )
+    out["country"] = out.apply(
+        lambda r: str(r["country"]).strip() if str(r["country"]).strip() else infer_country_from_region(r["state"]),
+        axis=1,
+    )
+    out["sales"] = 0.0
+    out["priority"] = "Lead"
+    out["lat"] = pd.to_numeric(out["lat"], errors="coerce")
+    out["lon"] = pd.to_numeric(out["lon"], errors="coerce")
+    return out[["source", "company", "category", "type", "country", "state", "city", "home_base", "website", "notes", "sales", "priority", "lat", "lon"]]
+
+def get_uploaded_account_df():
+    rows = st.session_state.get("account_map_rows", [])
+    if not rows:
+        return pd.DataFrame(columns=["source", "company", "category", "type", "country", "state", "city", "home_base", "website", "notes", "sales", "priority", "lat", "lon"])
+    df = pd.DataFrame(rows)
+    for col in ["lat", "lon", "sales"]:
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    return df
+
+def build_account_map_df(market_df, competitor_detail_df=None):
+    frames = []
+    if market_df is not None and not market_df.empty:
+        m = market_df.copy()
+        m["sales_base"] = m["sales_2025"].fillna(m["sales_2024"]).fillna(m["sales_2023"]).fillna(m["sales_2022"]).fillna(0)
+        if "opportunity_score" not in m.columns:
+            m = add_opportunity_scores(m)
+        frames.append(pd.DataFrame({
+            "source": "Market Insight",
+            "company": m["company"],
+            "category": m["category"],
+            "type": m["type"],
+            "country": "United States",
+            "state": m["state"].astype(str).str.upper(),
+            "city": m["home_base"].astype(str).str.replace(r",\s*[A-Z]{2}$", "", regex=True),
+            "home_base": m["home_base"],
+            "website": "",
+            "notes": m["category"],
+            "sales": m["sales_base"],
+            "priority": m["grade"],
+            "lat": pd.NA,
+            "lon": pd.NA,
+        }))
+    if competitor_detail_df is not None and not competitor_detail_df.empty:
+        d = competitor_detail_df.copy()
+        d["state"] = d["destination"].map(infer_region_from_text)
+        d = d[d["state"].isin(REGION_CENTERS.keys())]
+        if not d.empty:
+            imp = (
+                d.groupby(["importer", "country", "state"], as_index=False)
+                .agg(
+                    weight_kg=("weight_kg", "sum"),
+                    competitors=("competitor", lambda s: ", ".join(sorted(set(map(str, s)))[:4])),
+                    destination=("destination", lambda s: ", ".join(pd.Series(s).astype(str).dropna().unique()[:3])),
+                )
+            )
+            frames.append(pd.DataFrame({
+                "source": "ImportYeti Upload",
+                "company": imp["importer"],
+                "category": "ImportYeti Lead",
+                "type": "Importer",
+                "country": imp["country"].where(imp["country"].astype(str).str.len() > 0, imp["state"].map(infer_country_from_region)),
+                "state": imp["state"],
+                "city": imp["destination"],
+                "home_base": imp["destination"],
+                "website": "",
+                "notes": "경쟁사 흔적: " + imp["competitors"],
+                "sales": imp["weight_kg"],
+                "priority": "Lead",
+                "lat": pd.NA,
+                "lon": pd.NA,
+            }))
+    uploaded = get_uploaded_account_df()
+    if not uploaded.empty:
+        frames.append(uploaded)
+    if not frames:
+        return pd.DataFrame(columns=["source", "company", "category", "type", "country", "state", "city", "home_base", "website", "notes", "sales", "priority", "lat", "lon"])
+
+    df = pd.concat(frames, ignore_index=True)
+    df["company"] = df["company"].astype(str).str.strip()
+    df = df[(df["company"] != "") & (df["company"].str.lower() != "nan")]
+    df["state"] = df["state"].astype(str).str.upper().replace({"NAN": "", "NONE": ""})
+    df["country"] = df.apply(lambda r: r["country"] if str(r["country"]).strip() and str(r["country"]).lower() != "nan" else infer_country_from_region(r["state"]), axis=1)
+    df["sales"] = pd.to_numeric(df["sales"], errors="coerce").fillna(0)
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+    for idx, row in df.iterrows():
+        if pd.isna(row["lat"]) or pd.isna(row["lon"]):
+            center = REGION_CENTERS.get(row["state"])
+            if center:
+                lat_offset, lon_offset = account_jitter(row["company"], row["state"], idx)
+                df.at[idx, "lat"] = center[0] + lat_offset
+                df.at[idx, "lon"] = center[1] + lon_offset
+    df = df.drop_duplicates(subset=["company", "state", "source"], keep="first")
+    return df.reset_index(drop=True)
 
 def build_market_summary(v_housing, d_housing, v_mortgage, d_mortgage, v_cpi, d_cpi,
                          v_fedfunds, usd_krw, v_wti, d_wti):
@@ -1820,7 +1989,7 @@ def build_home_insight(summary, alerts, d_fx, d_scfi, d_pvc, d_dotp):
 MENU_GROUPS = {
     "🏠 Home": ["🏠 Home"],
     "📊 Overview": ["📊 Overview"],
-    "💼 Sales Intelligence": ["🎯 Market Insight", "🏭 Competitor Export", "💱 FX/Tariff"],
+    "💼 Sales Intelligence": ["🎯 Market Insight", "🗺 Account Map", "🏭 Competitor Export", "💱 FX/Tariff"],
     "🚢 Cost & Logistics": ["🛢 원자재", "🚢 Freight"],
     "🎨 Design & News": ["🎨 Design Intelligence", "📰 FCW News"],
     "🏡 Macro / Housing": ["🏡 Housing", "📈 Macro"],
@@ -3135,6 +3304,230 @@ elif menu == "🎯 Market Insight":
             "market_insight_excel_download",
         )
         st.caption("현재 데이터는 제공된 캡처에서 확인 가능한 항목 기준입니다. 원본 엑셀을 주면 순위와 매출값을 더 정확하게 정리할 수 있습니다.")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 🗺 ACCOUNT MAP
+# ════════════════════════════════════════════════════════════
+elif menu == "🗺 Account Map":
+    st.markdown('<div class="sec"><span class="sec-t">North America Account Map</span><span class="sec-s">미국·캐나다 LVT / 바닥재 거래선 지도 · Searchable lead view</span><span class="live"><span class="dot"></span>Session ready</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="co-note">기본값은 Market Insight 거래선과 현재 세션의 ImportYeti 업로드 데이터를 합친 지도입니다. 별도 거래선 엑셀을 올리면 현재 세션에만 추가되고, GitHub/배포 파일에는 저장되지 않습니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Account Excel Upload Center — 거래선 후보 리스트 추가", expanded=False):
+        st.caption("권장 컬럼: company, category, country, state/province, city, home_base/address, website, notes, lat, lon. 위도/경도가 없으면 주/Province 중심에 자동 배치합니다.")
+        account_upload = st.file_uploader("거래선 엑셀 업로드", type=["xlsx", "xls"], key="account_map_upload")
+        if account_upload is not None:
+            account_sig = f"{account_upload.name}:{getattr(account_upload, 'size', 0)}"
+            if st.session_state.get("account_upload_signature") != account_sig:
+                try:
+                    uploaded_accounts = normalize_account_upload(account_upload)
+                    st.session_state.account_map_rows = uploaded_accounts.to_dict("records")
+                    st.session_state.account_upload_signature = account_sig
+                    st.success(f"업로드 완료: {len(uploaded_accounts):,}개 거래선 후보를 현재 세션 지도에 반영했습니다.")
+                except Exception as e:
+                    st.error(f"업로드 실패: {e}")
+            elif st.session_state.get("account_map_rows"):
+                st.success("이미 반영된 파일입니다. 지도와 테이블에 업로드 거래선이 포함되어 있습니다.")
+        if st.session_state.get("account_map_rows"):
+            if st.button("업로드 거래선 초기화", use_container_width=True, key="account_upload_reset"):
+                st.session_state.account_map_rows = []
+                st.session_state.account_upload_signature = ""
+                st.rerun()
+
+    account_df = build_account_map_df(df_market, get_competitor_destination_df())
+    if account_df.empty:
+        st.markdown('<div class="placeholder"><span style="font-size:26px">🗺</span><span>표시할 거래선 데이터가 없습니다</span></div>', unsafe_allow_html=True)
+    else:
+        a1, a2, a3, a4 = st.columns([1.15, 1, 1, 1], gap="small")
+        with a1:
+            search_text = st.text_input("Search", placeholder="업체명, 도시, 메모 검색", key="account_search")
+        with a2:
+            source_opts = sorted(account_df["source"].dropna().unique().tolist())
+            selected_sources = st.multiselect("Source", source_opts, default=source_opts, key="account_source_filter")
+        with a3:
+            category_opts = sorted(account_df["category"].dropna().unique().tolist())
+            selected_account_categories = st.multiselect("Category", category_opts, default=category_opts, key="account_category_filter")
+        with a4:
+            country_opts = sorted(account_df["country"].dropna().unique().tolist())
+            selected_countries = st.multiselect("Country", country_opts, default=country_opts, key="account_country_filter")
+
+        filtered = account_df[
+            account_df["source"].isin(selected_sources)
+            & account_df["category"].isin(selected_account_categories)
+            & account_df["country"].isin(selected_countries)
+        ].copy()
+        if search_text.strip():
+            q = search_text.strip().lower()
+            search_blob = (
+                filtered["company"].astype(str) + " " +
+                filtered["city"].astype(str) + " " +
+                filtered["home_base"].astype(str) + " " +
+                filtered["notes"].astype(str) + " " +
+                filtered["state"].astype(str)
+            ).str.lower()
+            filtered = filtered[search_blob.str.contains(re.escape(q), na=False)].copy()
+
+        region_options = ["All Regions"] + sorted([r for r in filtered["state"].dropna().unique().tolist() if r])
+        focused_region = st.selectbox("State / Province Focus", region_options, key="account_region_focus")
+        if focused_region != "All Regions":
+            filtered = filtered[filtered["state"] == focused_region].copy()
+
+        mapped = filtered.dropna(subset=["lat", "lon"]).copy()
+        region_summary = (
+            filtered.groupby(["country", "state"], as_index=False)
+            .agg(accounts=("company", "count"), sales=("sales", "sum"))
+            .sort_values(["accounts", "sales"], ascending=False)
+        )
+        total_accounts = len(filtered)
+        mapped_regions = filtered["state"].replace("", pd.NA).dropna().nunique()
+        market_accounts = int((filtered["source"] == "Market Insight").sum())
+        upload_accounts = int((filtered["source"] == "Uploaded Excel").sum())
+        importyeti_accounts = int((filtered["source"] == "ImportYeti Upload").sum())
+        st.markdown(f"""
+        <div class="account-source-grid">
+          <div class="account-source"><div class="account-k">Visible Accounts</div><div class="account-v">{total_accounts:,.0f}</div><div class="account-c">현재 검색/필터 기준</div></div>
+          <div class="account-source"><div class="account-k">Regions</div><div class="account-v">{mapped_regions:,.0f}</div><div class="account-c">State / Province coverage</div></div>
+          <div class="account-source"><div class="account-k">Core List</div><div class="account-v">{market_accounts:,.0f}</div><div class="account-c">Market Insight 기반 거래선</div></div>
+          <div class="account-source"><div class="account-k">Session Leads</div><div class="account-v">{upload_accounts + importyeti_accounts:,.0f}</div><div class="account-c">엑셀/ImportYeti 업로드 후보</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        map_col, focus_col = st.columns([1.7, 1], gap="medium")
+        with map_col:
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US / Canada Account Footprint</span><span class="p-m">Pins by account · hover for detail</span></div><div class="p-body">', unsafe_allow_html=True)
+            if mapped.empty:
+                st.markdown('<div class="placeholder"><span style="font-size:26px">📍</span><span>좌표로 배치 가능한 거래선이 없습니다</span></div>', unsafe_allow_html=True)
+            else:
+                category_colors = {
+                    "Top Distributors": T["accent"],
+                    "Top Retailers": GOLD,
+                    "Rising Stars": T["up"],
+                    "ImportYeti Lead": T["down"],
+                    "Uploaded Lead": "#A78BFA",
+                }
+                fig_accounts = go.Figure()
+                for cat in sorted(mapped["category"].dropna().unique()):
+                    sub = mapped[mapped["category"] == cat].copy()
+                    size_base = pd.to_numeric(sub["sales"], errors="coerce").fillna(0)
+                    size = (size_base.rank(pct=True).fillna(0.4) * 16 + 7).clip(8, 24)
+                    fig_accounts.add_trace(go.Scattergeo(
+                        lon=sub["lon"],
+                        lat=sub["lat"],
+                        mode="markers",
+                        name=str(cat),
+                        text=sub["company"],
+                        customdata=sub[["source", "country", "state", "home_base", "sales", "notes"]],
+                        marker=dict(
+                            size=size,
+                            color=category_colors.get(cat, "#7AA7FF"),
+                            opacity=0.82,
+                            line=dict(color="#FFFFFF", width=0.8),
+                        ),
+                        hovertemplate=(
+                            "<b>%{text}</b><br>"
+                            "%{customdata[0]} · %{customdata[1]} %{customdata[2]}<br>"
+                            "%{customdata[3]}<br>"
+                            "Scale: %{customdata[4]:,.0f}<br>"
+                            "%{customdata[5]}<extra></extra>"
+                        ),
+                    ))
+                label_regions = region_summary[region_summary["state"].isin(REGION_CENTERS.keys())].copy()
+                if not label_regions.empty:
+                    label_regions["lat"] = label_regions["state"].map(lambda s: REGION_CENTERS.get(s, (None, None))[0])
+                    label_regions["lon"] = label_regions["state"].map(lambda s: REGION_CENTERS.get(s, (None, None))[1])
+                    fig_accounts.add_trace(go.Scattergeo(
+                        lon=label_regions["lon"],
+                        lat=label_regions["lat"],
+                        text=label_regions["state"] + " · " + label_regions["accounts"].astype(str),
+                        mode="text",
+                        textfont=dict(color="#FFFFFF", size=fs(9), family="Arial Black"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    ))
+                geo_kwargs = dict(
+                    scope="north america",
+                    projection_type="mercator",
+                    bgcolor="rgba(0,0,0,0)",
+                    landcolor=T["panel2"],
+                    lakecolor=T["bg"],
+                    oceancolor=T["bg"],
+                    showcountries=True,
+                    countrycolor=T["border"],
+                    showsubunits=True,
+                    subunitcolor=T["border"],
+                    showocean=True,
+                )
+                if focused_region != "All Regions" and focused_region in REGION_CENTERS:
+                    lat, lon = REGION_CENTERS[focused_region]
+                    geo_kwargs.update(center=dict(lat=lat, lon=lon), projection_scale=4.6)
+                else:
+                    geo_kwargs.update(center=dict(lat=44, lon=-98), projection_scale=1.45)
+                fig_accounts.update_geos(**geo_kwargs)
+                chart_layout(fig_accounts, 560)
+                fig_accounts.update_layout(
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.15)"),
+                    hovermode="closest",
+                )
+                st.plotly_chart(fig_accounts, use_container_width=True, config=CHART_CONFIG)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
+        with focus_col:
+            if focused_region == "All Regions":
+                st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Top Regions</span><span class="p-m">Account concentration</span></div><div class="p-body">', unsafe_allow_html=True)
+                top_regions = region_summary.head(14).copy()
+                if not top_regions.empty:
+                    top_regions["Region"] = top_regions["country"].str.replace("United States", "US", regex=False).str.replace("Canada", "CA", regex=False) + " · " + top_regions["state"]
+                    fig_region = go.Figure(go.Bar(
+                        x=top_regions.sort_values("accounts")["accounts"],
+                        y=top_regions.sort_values("accounts")["Region"],
+                        orientation="h",
+                        marker_color=GOLD,
+                        hovertemplate="%{y}<br>Accounts: %{x}<extra></extra>",
+                    ))
+                    chart_layout(fig_region, 330)
+                    fig_region.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
+                    st.plotly_chart(fig_region, use_container_width=True, config=CHART_CONFIG)
+                st.markdown('</div></div>', unsafe_allow_html=True)
+                st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Map Sources</span><span class="p-m">Data mix</span></div><div class="p-body">', unsafe_allow_html=True)
+                for src, cnt in filtered["source"].value_counts().items():
+                    st.markdown(f'<span class="account-chip">{html.escape(str(src))} · {cnt:,}</span>', unsafe_allow_html=True)
+                st.markdown('</div></div>', unsafe_allow_html=True)
+            else:
+                region_accounts = filtered.sort_values(["sales", "company"], ascending=[False, True]).copy()
+                st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">{focused_region} Account List</span><span class="p-m">{len(region_accounts)} accounts</span></div><div class="p-body">', unsafe_allow_html=True)
+                display_region = region_accounts[["source", "category", "company", "home_base", "sales", "notes"]].rename(columns={
+                    "source": "Source", "category": "Category", "company": "Company", "home_base": "Location", "sales": "Scale", "notes": "Notes"
+                })
+                st.markdown(dataframe_to_dark_table(display_region, max_rows=18), unsafe_allow_html=True)
+                st.markdown('</div></div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Searchable Account Table</span><span class="p-m">Filtered result</span></div><div class="p-body">', unsafe_allow_html=True)
+        table_df = filtered.copy()
+        table_df["Website"] = table_df["website"].apply(
+            lambda url: f'<a href="{html.escape(str(url))}" target="_blank" rel="noopener noreferrer">Open</a>'
+            if str(url).strip() and str(url).lower() != "nan" else ""
+        )
+        table_df = table_df[["source", "category", "type", "country", "state", "company", "home_base", "Website", "sales", "priority", "notes"]].rename(columns={
+            "source": "Source", "category": "Category", "type": "Type", "country": "Country", "state": "State/Province",
+            "company": "Company", "home_base": "Location", "sales": "Scale", "priority": "Priority", "notes": "Notes",
+        })
+        table_df = table_df.sort_values(["Country", "State/Province", "Category", "Scale", "Company"], ascending=[True, True, True, False, True])
+        st.markdown(dataframe_to_dark_table(table_df), unsafe_allow_html=True)
+        excel_download_button(
+            "📊 Account Map 엑셀 다운로드",
+            {
+                "Filtered Accounts": table_df.drop(columns=["Website"], errors="ignore"),
+                "Region Summary": region_summary,
+                "Raw Account Map": filtered,
+            },
+            f"kcc_lvt_account_map_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            "account_map_excel_download",
+        )
+        st.caption("현재 핀은 주/Province 중심 좌표 기반입니다. 엑셀에 lat/lon 컬럼을 추가하면 개별 주소 수준의 정확한 위치로 표시할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════

@@ -225,6 +225,18 @@ st.markdown(f"""
 .score-a {{ background:{T['up']}; }}
 .score-b {{ background:{GOLD}; color:#111; }}
 .score-c {{ background:{T['text3']}; }}
+.watch-grid {{ display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:12px; }}
+.watch-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:12px; min-height:86px; }}
+.watch-k {{ color:{T['text3']}; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; }}
+.watch-v {{ color:{T['text']}; font-size:19px; font-family:'SF Mono','Consolas',monospace; font-weight:800; line-height:1.1; }}
+.watch-c {{ color:{T['text2']}; font-size:11px; margin-top:6px; }}
+.board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
+.board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
+.board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
+.board-v {{ color:{T['text']}; font-size:13px; line-height:1.65; }}
+.impact-high {{ color:{T['down']}; font-weight:800; }}
+.impact-mid {{ color:{GOLD}; font-weight:800; }}
+.impact-low {{ color:{T['up']}; font-weight:800; }}
 
 /* 입력 위젯 */
 [data-testid="stNumberInput"] label, [data-testid="stTextInput"] label {{ color:{T['text2']} !important; font-size:11px !important; font-weight:600; }}
@@ -765,6 +777,102 @@ def add_opportunity_scores(df):
     scored["grade"] = pd.cut(scored["opportunity_score"], bins=[-1, 54.9, 74.9, 100], labels=["C", "B", "A"]).astype(str)
     return scored
 
+def build_action_recommendations(alerts, usd_krw, v_scfi, d_scfi, v_mortgage, d_pvc, d_dotp):
+    recs = []
+    alert_titles = {a["title"] for a in alerts}
+    if "SCFI" in alert_titles or v_scfi >= 2800 or d_scfi >= 8:
+        recs.append({"영역": "운임", "권고 액션": "신규 견적의 운임 유효기간을 7~10일로 짧게 관리하고, 선적 예정 건은 선복 확보 여부를 먼저 확인"})
+    if "USD/KRW" in alert_titles or usd_krw >= 1500:
+        recs.append({"영역": "환율", "권고 액션": "원화 환산 매출은 우호적이나 달러 비용 항목과 가격 통보 시점을 함께 점검"})
+    if v_mortgage >= 6.5:
+        recs.append({"영역": "수요", "권고 액션": "주택/리모델링 수요 민감 거래선은 보수적 판매계획과 프로모션 제품 믹스 재점검"})
+    if d_pvc >= 5 or d_dotp >= 5:
+        recs.append({"영역": "원가", "권고 액션": "PVC/DOTP 상승분이 견적 원가에 반영되는지 확인하고, 월별 구매팀 지수 업데이트 주기를 고정"})
+    if not recs:
+        recs.append({"영역": "운영", "권고 액션": "즉시 조정이 필요한 위험 신호는 낮습니다. 기존 견적·선적·가격 정책을 유지하면서 주간 모니터링"})
+    recs.append({"영역": "보고", "권고 액션": "상부 보고 시 Alert, 운임/환율, 원자재, 주요 뉴스 3개를 한 페이지로 요약"})
+    return pd.DataFrame(recs[:5])
+
+def build_watchlist_items():
+    return {
+        "USD/KRW": {"value": f"{usd_krw:,.0f}", "change": f"20거래일 {d_fx:+.1f}%"},
+        "SCFI": {"value": f"{v_scfi:,.0f}", "change": f"4주 {d_scfi:+.1f}%"},
+        "PVC": {"value": f"{v_pvc:,.2f}", "change": f"MoM {d_pvc:+.1f}%"},
+        "DOTP": {"value": f"{v_dotp:,.2f}", "change": f"MoM {d_dotp:+.1f}%"},
+        "WTI": {"value": f"${v_wti:.1f}", "change": f"{d_wti:+.1f}%"},
+        "30Y Mortgage": {"value": f"{v_mortgage:.2f}%", "change": f"{d_mortgage:+.2f}%p"},
+        "Housing Starts": {"value": f"{v_housing:,.0f}K", "change": f"MoM {d_housing:+.1f}%"},
+        "Tariff": {"value": f"{st.session_state.sim_duty:.0f}%", "change": "임시 관세"},
+    }
+
+def render_watchlist(selected):
+    items = build_watchlist_items()
+    cards = ""
+    for name in selected:
+        item = items.get(name)
+        if not item:
+            continue
+        cards += (
+            f'<div class="watch-card"><div class="watch-k">{html.escape(name)}</div>'
+            f'<div class="watch-v">{html.escape(item["value"])}</div>'
+            f'<div class="watch-c">{html.escape(item["change"])}</div></div>'
+        )
+    return f'<div class="watch-grid">{cards}</div>' if cards else ""
+
+def get_comment_log_df():
+    if "monthly_comment_log" not in st.session_state:
+        st.session_state.monthly_comment_log = []
+    return pd.DataFrame(st.session_state.monthly_comment_log)
+
+def save_monthly_comment(month, category, comment):
+    if "monthly_comment_log" not in st.session_state:
+        st.session_state.monthly_comment_log = []
+    rows = [r for r in st.session_state.monthly_comment_log if not (r["월"] == month and r["카테고리"] == category)]
+    rows.append({
+        "월": month,
+        "카테고리": category,
+        "코멘트": comment.strip(),
+        "작성/수정": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    })
+    st.session_state.monthly_comment_log = sorted(rows, key=lambda r: (r["월"], r["카테고리"]), reverse=True)
+
+def build_customer_impact(market_view, state_summary, alerts):
+    if market_view.empty or state_summary.empty:
+        return pd.DataFrame()
+    alert_names = {a["title"] for a in alerts}
+    state_priority = (
+        market_view.groupby("state", as_index=False)
+        .agg(
+            priority_a=("grade", lambda s: int((s == "A").sum())),
+            avg_score=("opportunity_score", "mean"),
+            top_accounts=("company", lambda s: ", ".join(s.head(3))),
+        )
+    )
+    impact = state_summary.merge(state_priority, on="state", how="left").fillna({"priority_a": 0, "avg_score": 0, "top_accounts": ""})
+    risk_score = 0
+    if "SCFI" in alert_names or d_scfi >= 8:
+        risk_score += 25
+    if "USD/KRW" in alert_names:
+        risk_score += 15
+    if "30Y Mortgage" in alert_names or v_mortgage >= 6.5:
+        risk_score += 15
+    if "PVC" in alert_names or "DOTP" in alert_names:
+        risk_score += 10
+    impact["impact_score"] = (
+        impact["companies"].rank(pct=True) * 30
+        + impact["avg_score"].fillna(0) * 0.45
+        + impact["priority_a"].fillna(0) * 7
+        + risk_score
+    ).clip(upper=100).round(1)
+    impact["영향도"] = pd.cut(impact["impact_score"], bins=[-1, 54.9, 74.9, 100], labels=["LOW", "MID", "HIGH"]).astype(str)
+    impact["영업 포인트"] = impact.apply(
+        lambda r: "운임/환율 변동 반영 견적 관리 우선" if r["영향도"] == "HIGH"
+        else "주요 거래선 모니터링 및 분기별 업데이트" if r["영향도"] == "MID"
+        else "일반 모니터링",
+        axis=1,
+    )
+    return impact.sort_values("impact_score", ascending=False)
+
 def create_pdf_report(metrics, summary, ai_briefing=""):
     from io import BytesIO
     from reportlab.lib import colors
@@ -1109,10 +1217,51 @@ if menu == "📊 Overview":
     )
     alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
     weekly_brief = build_weekly_brief(market_summary, alerts, d_fx, d_scfi, d_pvc, d_dotp)
+    action_recs = build_action_recommendations(alerts, usd_krw, v_scfi, d_scfi, v_mortgage, d_pvc, d_dotp)
 
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Alert / Warning Center</span><span class="p-m">Threshold watch</span></div><div class="p-body">', unsafe_allow_html=True)
     st.markdown(render_alert_cards(alerts), unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Action Recommendation Box</span><span class="p-m">What to do next</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(dataframe_to_dark_table(action_recs), unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    watch_items = list(build_watchlist_items().keys())
+    selected_watch = st.multiselect(
+        "Watchlist",
+        watch_items,
+        default=["USD/KRW", "SCFI", "PVC", "30Y Mortgage", "Tariff"],
+        label_visibility="collapsed",
+        key="overview_watchlist",
+    )
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">My Watchlist</span><span class="p-m">Focus indicators</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(render_watchlist(selected_watch), unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    board_mode = st.checkbox("Board Report Mode", value=False, help="상부 보고용으로 핵심 항목만 압축해서 봅니다.")
+    if board_mode:
+        top_news = llm.fetch_news("freight", limit=3)
+        news_lines = "<br>".join([f'{i+1}. {html.escape(n.get("title", ""))}' for i, n in enumerate(top_news[:3])]) or "주요 뉴스 없음"
+        alert_line = "<br>".join([f'{html.escape(a["title"])}: {html.escape(a["value"])}' for a in alerts[:3]]) or "주요 임계값 초과 없음"
+        action_line = "<br>".join([f'{i+1}. {html.escape(r["권고 액션"])}' for i, (_, r) in enumerate(action_recs.head(3).iterrows())])
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Board Report View</span><span class="p-m">One-page executive mode</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="board-grid">
+              <div class="board-card"><div class="board-k">Headline</div><div class="board-v">{html.escape(market_summary["headline"])}</div></div>
+              <div class="board-card"><div class="board-k">Risk Signals</div><div class="board-v">{alert_line}</div></div>
+              <div class="board-card"><div class="board-k">Action Points</div><div class="board-v">{action_line}</div></div>
+            </div>
+            <div class="board-grid">
+              <div class="board-card"><div class="board-k">Core Metrics</div><div class="board-v">USD/KRW {usd_krw:,.0f}<br>SCFI {v_scfi:,.0f}<br>PVC {v_pvc:,.2f}<br>30Y Mortgage {v_mortgage:.2f}%</div></div>
+              <div class="board-card"><div class="board-k">Weekly Brief</div><div class="board-v">{"<br>".join([html.escape(x) for x in weekly_brief[:3]])}</div></div>
+              <div class="board-card"><div class="board-k">Top Freight News</div><div class="board-v">{news_lines}</div></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     b_col, u_col = st.columns([1.2, 1], gap="medium")
     with b_col:
@@ -1148,6 +1297,39 @@ if menu == "📊 Overview":
                 except Exception as e:
                     st.error(f"운임 지수 업로드 형식을 확인해주세요: {e}")
         st.caption("업로드 반영은 현재 접속 세션 기준입니다. 팀 전체에 고정 반영하려면 업데이트된 데이터를 코드/JSON에 반영해 GitHub에 다시 올리는 방식이 가장 안정적입니다.")
+
+    with st.expander("Monthly Comment Log — 월별 시장 판단 기록"):
+        default_month = datetime.now().strftime("%Y-%m")
+        log_col1, log_col2 = st.columns([1, 1], gap="medium")
+        with log_col1:
+            log_month = st.text_input("기준월", value=default_month, key="comment_month")
+        with log_col2:
+            log_category = st.selectbox("카테고리", ["Overview", "Raw Materials", "Freight", "Housing", "Macro", "FX/Tariff", "Market Insight"], key="comment_category")
+        existing_log = get_comment_log_df()
+        existing_text = ""
+        if not existing_log.empty:
+            matched = existing_log[(existing_log["월"] == log_month) & (existing_log["카테고리"] == log_category)]
+            if len(matched):
+                existing_text = matched.iloc[0]["코멘트"]
+        log_text = st.text_area("코멘트", value=existing_text, height=110, key="comment_text")
+        if st.button("코멘트 저장", use_container_width=True, key="save_monthly_comment"):
+            if log_text.strip():
+                save_monthly_comment(log_month[:7], log_category, log_text)
+                st.success("월별 코멘트를 저장했습니다. 현재 접속 세션 기준으로 유지됩니다.")
+                st.rerun()
+            else:
+                st.warning("저장할 코멘트를 입력해주세요.")
+        log_df = get_comment_log_df()
+        if not log_df.empty:
+            st.markdown(dataframe_to_dark_table(log_df), unsafe_allow_html=True)
+            excel_download_button(
+                "📊 코멘트 로그 엑셀 다운로드",
+                {"Monthly Comment Log": log_df},
+                f"kcc_lvt_comment_log_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "comment_log_excel_download",
+            )
+        else:
+            st.caption("아직 저장된 코멘트가 없습니다. 월별 회의나 보고 후 판단 근거를 남겨두면 다음 달 비교가 쉬워집니다.")
 
     # ── 특정 날짜 지표 조회 ──
     with st.expander("📅 특정 날짜 지표 조회 — 과거 시점의 모든 지표를 한눈에"):
@@ -1818,6 +2000,43 @@ elif menu == "🎯 Market Insight":
         state_summary["lat"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[0])
         state_summary["lon"] = state_summary["state"].map(lambda s: STATE_CENTERS.get(s, (None, None))[1])
         active_state_options = state_summary["state"].dropna().sort_values().tolist()
+        market_alerts = build_alerts(usd_krw, v_wti, d_wti, v_mortgage, v_scfi, d_scfi, d_pvc, d_dotp)
+        customer_impact = build_customer_impact(market_view, state_summary, market_alerts)
+
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Customer Impact View</span><span class="p-m">State-level exposure</span></div><div class="p-body">', unsafe_allow_html=True)
+        impact_col, impact_chart_col = st.columns([1.2, 1], gap="medium")
+        impact_display = customer_impact.head(10).copy()
+        if not impact_display.empty:
+            impact_display["영향도"] = impact_display["영향도"].map(
+                lambda x: f'<span class="impact-high">{x}</span>' if x == "HIGH"
+                else f'<span class="impact-mid">{x}</span>' if x == "MID"
+                else f'<span class="impact-low">{x}</span>'
+            )
+            impact_display = impact_display[["state", "영향도", "impact_score", "companies", "priority_a", "top_accounts", "영업 포인트"]].rename(columns={
+                "state": "State",
+                "impact_score": "Impact Score",
+                "companies": "Companies",
+                "priority_a": "Priority A",
+                "top_accounts": "Top Accounts",
+            })
+            with impact_col:
+                st.markdown(dataframe_to_dark_table(impact_display), unsafe_allow_html=True)
+                st.caption("영향도는 거래선 집중도, Priority A 거래선, 현재 운임/환율/금리/원가 위험 신호를 함께 반영한 참고값입니다.")
+            with impact_chart_col:
+                top_impact = customer_impact.head(10).sort_values("impact_score")
+                fig_impact = go.Figure(go.Bar(
+                    x=top_impact["impact_score"],
+                    y=top_impact["state"],
+                    orientation="h",
+                    marker_color=GOLD,
+                    hovertemplate="%{y}<br>Impact: %{x:.1f}<extra></extra>",
+                ))
+                chart_layout(fig_impact, 320)
+                fig_impact.update_layout(xaxis_title="Impact Score", yaxis_title=None, showlegend=False)
+                st.plotly_chart(fig_impact, use_container_width=True, config=CHART_CONFIG)
+        else:
+            st.markdown('<div class="placeholder"><span style="font-size:26px">IMPACT</span><span>영향도 계산 대상 데이터가 없습니다</span></div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
         st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Account Opportunity Score</span><span class="p-m">Priority ranking</span></div><div class="p-body">', unsafe_allow_html=True)
         opp_col, opp_chart_col = st.columns([1.2, 1], gap="medium")
@@ -1992,6 +2211,7 @@ elif menu == "🎯 Market Insight":
                 "Accounts": market_view[display_cols],
                 "State Summary": state_summary,
                 "Opportunity Top": top_opps[["grade", "opportunity_score", "category", "company", "home_base", "state", "sales_base"]],
+                "Customer Impact": customer_impact,
             },
             f"kcc_lvt_market_insight_{datetime.now().strftime('%Y%m%d')}.xlsx",
             "market_insight_excel_download",

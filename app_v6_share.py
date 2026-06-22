@@ -181,9 +181,14 @@ st.markdown(f"""
 
 /* 패널 */
 .panel {{ background:{T['panel']}; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; margin-bottom:12px; }}
-.p-head {{ padding:10px 14px; border-bottom:1px solid {T['border']}; display:flex; justify-content:space-between; align-items:center; }}
-.p-t {{ font-size:12px; font-weight:700; letter-spacing:0.2px; color:{T['text']}; }}
-.p-m {{ font-size:10px; color:{T['text3']}; font-family:'SF Mono','Consolas',monospace; }}
+.p-head {{ padding:11px 14px; border-bottom:1px solid {T['border']}; display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(90deg,color-mix(in srgb,{NAVY} 34%,{T['panel2']}),color-mix(in srgb,{T['panel2']} 88%,{T['bg']}));
+  border-left:3px solid {GOLD}; }}
+.p-t {{ font-size:12px; font-weight:800; letter-spacing:0.2px; color:{T['text']}; }}
+.p-m {{ font-size:10px; color:{T['text2']}; font-family:'SF Mono','Consolas',monospace; }}
+.p-guide {{ padding:9px 14px; border-bottom:1px solid {T['border']}; background:color-mix(in srgb,{T['panel2']} 88%,{T['bg']});
+  color:{T['text2']}; font-size:12px; line-height:1.55; }}
+.p-guide b {{ color:{GOLD}; font-weight:900; }}
 .p-body {{ padding:14px; }}
 
 /* 데이터 테이블 */
@@ -2856,7 +2861,7 @@ elif menu == "🛢 원자재":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">PVC / DOTP 구매팀 월별 지수</span><span class="p-m">Manual monthly update</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">PVC / DOTP 구매팀 월별 지수</span><span class="p-m">Manual monthly update</span></div><div class="p-guide"><b>활용 포인트</b> 월별 구매팀 지수는 견적 원가 전제와 가격 조정 타이밍을 판단하는 내부 기준값으로 활용합니다.</div><div class="p-body">', unsafe_allow_html=True)
     edit_col, guide_col = st.columns([2, 1], gap="medium")
     with edit_col:
         latest_purchase = df_purchase.iloc[-1] if len(df_purchase) else {"월": datetime.now().strftime("%Y-%m"), "PVC": 0, "DOTP": 0}
@@ -2937,7 +2942,7 @@ elif menu == "🛢 원자재":
     period_map = {"1년": 365, "3년": 365*3, "전체": None}
     days = period_map[period]
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">유가 추이 (WTI / Brent)</span><span class="p-m">FRED · USD/barrel</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">유가 추이 (WTI / Brent)</span><span class="p-m">FRED · USD/barrel</span></div><div class="p-guide"><b>활용 포인트</b> 유가는 PVC·가소제·운임 비용 분위기에 영향을 주는 선행성 비용 신호로 봅니다.</div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
     if days:
         cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
@@ -2984,7 +2989,7 @@ elif menu == "🛢 원자재":
             "yoy": fmt_change(pct_change(current, py)),
         }
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">미국 자재 가격 보조 지표</span><span class="p-m">Lumber / Building Material PPI</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">미국 자재 가격 보조 지표</span><span class="p-m">Lumber / Building Material PPI</span></div><div class="p-guide"><b>활용 포인트</b> 미국 건축 자재 전반의 가격 압력을 보며 바이어의 가격 민감도와 시장 분위기를 보조 판단합니다.</div><div class="p-body">', unsafe_allow_html=True)
     fig_aux = go.Figure()
     fig_aux.add_trace(go.Scatter(
         x=df_lumber_ppi["date"], y=df_lumber_ppi["Lumber PPI"], name="Lumber PPI",
@@ -3009,7 +3014,7 @@ elif menu == "🛢 원자재":
         raw_compare_row("Building Material PPI", df_building_ppi, "건자재유통PPI", "Index", 1),
     ]
     raw_table = build_market_compare_rows(raw_rows)
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">원자재 핵심 지표 비교표</span><span class="p-m">Current vs 1M / 1Y</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">원자재 핵심 지표 비교표</span><span class="p-m">Current vs 1M / 1Y</span></div><div class="p-guide"><b>활용 포인트</b> 현재값만 보지 말고 전월·전년 대비 변화율을 같이 봐야 가격 인상/방어 논리를 만들기 쉽습니다.</div><div class="p-body">', unsafe_allow_html=True)
     st.markdown(
         f"""
         <table class="dt">
@@ -3053,7 +3058,7 @@ elif menu == "🚢 Freight":
     if freight_period == "1년":
         dff = dff[dff["date"] >= (pd.Timestamp.now() - pd.Timedelta(days=365))]
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">SCFI / CCFI 추이</span><span class="p-m">국가물류통합정보센터 · Weekly</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">SCFI / CCFI 추이</span><span class="p-m">국가물류통합정보센터 · Weekly</span></div><div class="p-guide"><b>활용 포인트</b> SCFI는 스팟 운임 방향성, CCFI는 계약/종합 운임 흐름을 보조적으로 읽어 선적 타이밍과 견적 유효기간을 판단합니다.</div><div class="p-body">', unsafe_allow_html=True)
     if len(dff):
         fig_ship = go.Figure()
         fig_ship.add_trace(go.Scatter(
@@ -3619,7 +3624,7 @@ elif menu == "🗺 Account Map":
 
         map_col, focus_col = st.columns([1.7, 1], gap="medium")
         with map_col:
-            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US / Canada Account Footprint</span><span class="p-m">Pins by account · hover for detail</span></div><div class="p-body">', unsafe_allow_html=True)
+            st.markdown('<div class="panel"><div class="p-head"><span class="p-t">US / Canada Account Footprint</span><span class="p-m">Pins by account · hover for detail</span></div><div class="p-guide"><b>활용 포인트</b> 주별 거래선 밀집도와 Google/ImportYeti 후보를 함께 보며 영업 타깃 지역과 방문 우선순위를 잡습니다.</div><div class="p-body">', unsafe_allow_html=True)
             map_view_mode = st.radio(
                 "Map View",
                 ["3D Perspective", "2D Region Map"],
@@ -4334,7 +4339,7 @@ elif menu == "🏡 Housing":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Pipeline</span><span class="p-m">Permits → Starts → Completions</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Pipeline</span><span class="p-m">Permits → Starts → Completions</span></div><div class="p-guide"><b>활용 포인트</b> 건축허가는 선행 수요, 착공은 현재 프로젝트 흐름, 완공은 바닥재 투입 타이밍에 가까운 지표로 함께 봅니다.</div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df_permits["date"], y=df_permits["건축허가"], name="Building Permits (K)",
@@ -4357,7 +4362,7 @@ elif menu == "🏡 Housing":
 
     c_sales, c_supply = st.columns([1.2, 1], gap="medium")
     with c_sales:
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Home Sales Signal</span><span class="p-m">New vs Existing</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Home Sales Signal</span><span class="p-m">New vs Existing</span></div><div class="p-guide"><b>활용 포인트</b> 신규주택은 builder 수요, 기존주택 판매는 리모델링·교체 수요 분위기와 연결해서 봅니다.</div><div class="p-body">', unsafe_allow_html=True)
         fig_sales_home = go.Figure()
         fig_sales_home.add_trace(go.Scatter(
             x=df_newsales["date"], y=df_newsales["신규주택판매"], name="New Home Sales (K)",
@@ -4374,7 +4379,7 @@ elif menu == "🏡 Housing":
         st.plotly_chart(fig_sales_home, use_container_width=True, config=CHART_CONFIG)
         st.markdown('</div></div>', unsafe_allow_html=True)
     with c_supply:
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">New Home Inventory Pressure</span><span class="p-m">Monthly supply</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">New Home Inventory Pressure</span><span class="p-m">Monthly supply</span></div><div class="p-guide"><b>활용 포인트</b> 재고 개월 수가 높아지면 builder 가격 압박과 신규 주문 보수화 가능성을 같이 체크합니다.</div><div class="p-body">', unsafe_allow_html=True)
         fig_supply = go.Figure(go.Scatter(
             x=df_month_supply["date"], y=df_month_supply["신규주택재고개월"], name="Monthly Supply",
             line=dict(color=T["down"], width=2.5),
@@ -4387,7 +4392,7 @@ elif menu == "🏡 Housing":
         st.plotly_chart(fig_supply, use_container_width=True, config=CHART_CONFIG)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Indicator Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Housing Indicator Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-guide"><b>활용 포인트</b> 그래프에서 방향성을 보고, 표에서 전월·전년 대비 변화율로 보고용 문장을 정리합니다.</div><div class="p-body">', unsafe_allow_html=True)
     housing_rows = [
         indicator_compare_row("Building Permits", df_permits, "건축허가", "K", 0),
         indicator_compare_row("Housing Starts", df_housing, "주택착공", "K", 0),
@@ -4441,7 +4446,7 @@ elif menu == "📈 Macro":
       <div class="kpi"><div class="kpi-n">Lumber PPI</div><div class="kpi-v">{v_lumber_ppi:.1f}</div>{kpi_change(d_lumber_ppi)}</div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">CPI & Fed Funds Rate</span><span class="p-m">2019–Present</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">CPI & Fed Funds Rate</span><span class="p-m">2019–Present</span></div><div class="p-guide"><b>활용 포인트</b> CPI와 정책금리는 모기지 금리, 소비 심리, 환율 흐름에 영향을 주는 큰 배경 지표로 봅니다.</div><div class="p-body">', unsafe_allow_html=True)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df_cpi["date"], y=df_cpi["CPI"], name="CPI",
@@ -4479,7 +4484,7 @@ elif menu == "📈 Macro":
 
     macro_c1, macro_c2 = st.columns([1.15, 1], gap="medium")
     with macro_c1:
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Building Materials Retail Sales</span><span class="p-m">Demand proxy</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Building Materials Retail Sales</span><span class="p-m">Demand proxy</span></div><div class="p-guide"><b>활용 포인트</b> 홈센터·건자재 유통 채널 매출 흐름으로 리모델링 및 자재 구매 분위기를 보조 확인합니다.</div><div class="p-body">', unsafe_allow_html=True)
         fig_retail = go.Figure(go.Scatter(
             x=df_building_retail["date"],
             y=df_building_retail["건자재유통매출"],
@@ -4495,7 +4500,7 @@ elif menu == "📈 Macro":
         st.caption("건자재/자재 유통 채널의 매출 흐름으로 홈센터·리모델링 수요 분위기를 보조적으로 확인합니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
     with macro_c2:
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Material Price Pressure</span><span class="p-m">PPI signals</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Material Price Pressure</span><span class="p-m">PPI signals</span></div><div class="p-guide"><b>활용 포인트</b> 직접 원료 지표는 아니지만 미국 건축 자재 가격 압력을 읽는 보조 신호로 활용합니다.</div><div class="p-body">', unsafe_allow_html=True)
         fig_ppi = go.Figure()
         fig_ppi.add_trace(go.Scatter(
             x=df_lumber_ppi["date"], y=df_lumber_ppi["Lumber PPI"], name="Lumber PPI",
@@ -4512,7 +4517,7 @@ elif menu == "📈 Macro":
         st.caption("LVT 직접 원료는 아니지만, 미국 건축/자재 가격 압박을 읽는 보조 지표로 활용합니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Macro Extended Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Macro Extended Table</span><span class="p-m">MoM / YoY comparison</span></div><div class="p-guide"><b>활용 포인트</b> 거시 지표는 단일 수치보다 전월·전년 대비 방향성을 함께 보고 시장 코멘트의 근거로 씁니다.</div><div class="p-body">', unsafe_allow_html=True)
     extended_macro_rows = [
         indicator_compare_row("CPI", df_cpi, "CPI", "-", 2),
         indicator_compare_row("Fed Funds", df_fedfunds, "기준금리", "%", 2),

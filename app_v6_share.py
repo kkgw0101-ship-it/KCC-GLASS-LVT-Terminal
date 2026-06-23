@@ -150,6 +150,26 @@ st.markdown(f"""
 .sb-group-pages {{ background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.10); border-radius:9px; padding:8px 10px 10px 10px; margin:0 0 10px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {{ color:#9FB0D9 !important; font-size:10px !important; font-weight:900 !important; letter-spacing:.8px !important; text-transform:uppercase !important; }}
+[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+  background:#1E2F86 !important;
+  border:1px solid rgba(255,255,255,.16) !important;
+  border-radius:9px !important;
+  color:#FFFFFF !important;
+  min-height:38px !important;
+  box-shadow:none !important;
+}}
+[data-testid="stSidebar"] [data-baseweb="select"] > div:hover,
+[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within {{
+  background:#253992 !important;
+  border-color:rgba(232,179,57,.55) !important;
+  box-shadow:0 0 0 1px rgba(232,179,57,.16) inset !important;
+}}
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] svg {{
+  color:#FFFFFF !important;
+  fill:#FFFFFF !important;
+}}
 [data-testid="stSidebar"] [data-testid="stExpander"],
 [data-testid="stSidebar"] [data-testid="stExpander"] details,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary,
@@ -2386,34 +2406,42 @@ with st.sidebar:
     st.session_state.main_menu_group = PAGE_TO_GROUP.get(st.session_state.main_menu, "🏠 Home")
 
     st.markdown('<div class="sb-nav-label">Workspace</div>', unsafe_allow_html=True)
-    for group_name, group_pages in MENU_GROUPS.items():
-        active_group = st.session_state.main_menu_group == group_name
-        if active_group:
-            st.markdown(f'<div class="sb-group-active">▾ {group_name}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="sb-group-pages">', unsafe_allow_html=True)
-            for page_name in group_pages:
-                if page_name == st.session_state.main_menu:
-                    st.markdown(f'<div class="sb-active-page">{page_name}</div>', unsafe_allow_html=True)
-                else:
-                    st.button(
-                        page_name,
-                        key=f"nav_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', page_name)}",
-                        use_container_width=True,
-                        on_click=go_to_menu,
-                        args=(page_name,),
-                    )
-            if len(group_pages) > 1:
-                label = re.sub(r"^[^\w가-힣]+", "", group_name).strip()
-                st.markdown(f'<div class="sb-subnav">{label} 안에서 필요한 세부 화면을 선택합니다.</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.button(
-                f"› {group_name}",
-                key=f"group_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', group_name)}",
-                use_container_width=True,
-                on_click=go_to_group,
-                args=(group_name,),
-            )
+    group_options = list(MENU_GROUPS.keys())
+    if st.session_state.get("nav_group_select") != st.session_state.main_menu_group:
+        st.session_state.nav_group_select = st.session_state.main_menu_group
+    selected_group = st.selectbox(
+        "Workspace",
+        group_options,
+        index=group_options.index(st.session_state.main_menu_group),
+        label_visibility="collapsed",
+        key="nav_group_select",
+    )
+    if selected_group != st.session_state.main_menu_group:
+        st.session_state.main_menu_group = selected_group
+        st.session_state.main_menu = MENU_GROUPS[selected_group][0]
+
+    group_pages = MENU_GROUPS[st.session_state.main_menu_group]
+    if st.session_state.main_menu not in group_pages:
+        st.session_state.main_menu = group_pages[0]
+
+    if len(group_pages) > 1:
+        st.markdown('<div class="sb-nav-label">Section</div>', unsafe_allow_html=True)
+        page_key = f"nav_page_select_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', st.session_state.main_menu_group)}"
+        if st.session_state.get(page_key) != st.session_state.main_menu:
+            st.session_state[page_key] = st.session_state.main_menu
+        selected_page = st.selectbox(
+            "Section",
+            group_pages,
+            index=group_pages.index(st.session_state.main_menu),
+            label_visibility="collapsed",
+            key=page_key,
+        )
+        st.session_state.main_menu = selected_page
+        label = re.sub(r"^[^\w가-힣]+", "", st.session_state.main_menu_group).strip()
+        st.markdown(f'<div class="sb-subnav">{label} 안에서 필요한 세부 화면을 선택합니다.</div>', unsafe_allow_html=True)
+    else:
+        st.session_state.main_menu = group_pages[0]
+        st.markdown(f'<div class="sb-active-page">{st.session_state.main_menu}</div>', unsafe_allow_html=True)
     menu = st.session_state.main_menu
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)

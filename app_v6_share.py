@@ -68,6 +68,7 @@ def official_doc_url(file_name, file_real_name):
 
 KCC_ESG_LATEST_KO_URL = official_doc_url("ESG_REPORT_KCCGLASS_2024-2025_07_01.pdf", "ESG_보고서_KCCGLASS")
 KCC_ESG_LATEST_EN_URL = official_doc_url("ESG_REPORT_KCCGLASS_ENG_2024-2025_07_01.pdf", "ESG_REPORT_KCCGLASS_ENG")
+KCC_COMPANY_YOUTUBE_URL = "https://www.youtube.com/watch?v=0bk7OpOAaIE"
 
 ESG_SUMMARY_ITEMS = [
     {
@@ -2525,6 +2526,9 @@ if menu == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
         st.button("월간 PDF 보고서로 이동", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_report")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">KCC Glass YouTube</span></div><div class="p-guide"><b>활용 포인트</b> 외부 미팅이나 내부 공유 전 회사 공식 영상으로 브랜드 신뢰감을 빠르게 전달할 수 있습니다.</div><div class="p-body">', unsafe_allow_html=True)
+        st.video(KCC_COMPANY_YOUTUBE_URL)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Platform Role</span><span class="p-m">Shared operating view</span></div><div class="p-body">', unsafe_allow_html=True)

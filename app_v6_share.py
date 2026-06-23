@@ -146,16 +146,10 @@ st.markdown(f"""
 .sb-nav-label {{ color:#9FB0D9 !important; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin:12px 0 6px 0; }}
 .sb-subnav {{ color:#9FB0D9 !important; font-size:10px; line-height:1.45; margin:2px 0 8px 0; }}
 .sb-active-page {{ background:rgba(255,255,255,.12); border-left:3px solid {GOLD}; border-radius:7px; padding:7px 9px; margin:4px 0 7px 0; color:#fff !important; font-size:12px; font-weight:900; }}
+.sb-group-active {{ background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:9px 10px; margin:8px 0 6px 0; color:#fff !important; font-size:12px; font-weight:900; box-shadow:inset 0 -1px 0 rgba(232,179,57,.28); }}
+.sb-group-pages {{ background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.10); border-radius:9px; padding:8px 10px 10px 10px; margin:0 0 10px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
-[data-testid="stSidebar"] [data-testid="stExpander"] {{ border:1px solid rgba(255,255,255,.12) !important; border-radius:9px !important; background:rgba(255,255,255,.035) !important; margin-bottom:8px; overflow:hidden; box-shadow:none !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details {{ background:rgba(255,255,255,.035) !important; border:none !important; box-shadow:none !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary {{ padding:8px 10px !important; font-weight:900 !important; background:rgba(255,255,255,.035) !important; border:none !important; box-shadow:none !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details[open] summary {{ background:rgba(255,255,255,.08) !important; border-bottom:1px solid rgba(255,255,255,.10) !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary:hover {{ background:rgba(255,255,255,.12) !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary p {{ color:#fff !important; font-size:12px !important; font-weight:900 !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {{ background:rgba(255,255,255,.035) !important; border:none !important; padding:8px 10px 10px 10px !important; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stVerticalBlock"] {{ background:transparent !important; }}
 [data-testid="stSidebar"] .stButton button {{ background:rgba(255,255,255,.06) !important; color:#DDE6FF !important; border:1px solid rgba(255,255,255,.10) !important; border-radius:7px !important; min-height:34px !important; text-align:left !important; justify-content:flex-start !important; font-size:12px !important; font-weight:800 !important; }}
 [data-testid="stSidebar"] .stButton button:hover {{ background:rgba(255,255,255,.13) !important; color:#fff !important; border-color:rgba(232,179,57,.55) !important; }}
 
@@ -2336,6 +2330,10 @@ def go_to_menu(target):
     st.session_state.main_menu_group = PAGE_TO_GROUP.get(target, "🏠 Home")
     st.session_state.main_menu = target
 
+def go_to_group(group_name):
+    st.session_state.main_menu_group = group_name
+    st.session_state.main_menu = MENU_GROUPS[group_name][0]
+
 with st.sidebar:
     st.markdown('<div class="sb-brand">LVT INTELLIGENCE</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
@@ -2353,7 +2351,9 @@ with st.sidebar:
     st.markdown('<div class="sb-nav-label">Workspace</div>', unsafe_allow_html=True)
     for group_name, group_pages in MENU_GROUPS.items():
         active_group = st.session_state.main_menu_group == group_name
-        with st.expander(group_name, expanded=active_group):
+        if active_group:
+            st.markdown(f'<div class="sb-group-active">▾ {group_name}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sb-group-pages">', unsafe_allow_html=True)
             for page_name in group_pages:
                 if page_name == st.session_state.main_menu:
                     st.markdown(f'<div class="sb-active-page">{page_name}</div>', unsafe_allow_html=True)
@@ -2365,9 +2365,18 @@ with st.sidebar:
                         on_click=go_to_menu,
                         args=(page_name,),
                     )
-            if active_group and len(group_pages) > 1:
+            if len(group_pages) > 1:
                 label = re.sub(r"^[^\w가-힣]+", "", group_name).strip()
                 st.markdown(f'<div class="sb-subnav">{label} 안에서 필요한 세부 화면을 선택합니다.</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.button(
+                f"› {group_name}",
+                key=f"group_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', group_name)}",
+                use_container_width=True,
+                on_click=go_to_group,
+                args=(group_name,),
+            )
     menu = st.session_state.main_menu
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)

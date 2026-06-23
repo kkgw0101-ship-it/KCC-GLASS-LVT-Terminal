@@ -345,6 +345,11 @@ st.markdown(f"""
 .home-step-no {{ width:30px; height:30px; border-radius:50%; background:{NAVY}; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'SF Mono','Consolas',monospace; font-size:11px; font-weight:900; box-shadow:inset 0 -2px 0 rgba(232,179,57,.55); }}
 .home-step-t {{ color:{T['text']}; font-size:13px; font-weight:900; margin-bottom:4px; }}
 .home-step-d {{ color:{T['text2']}; font-size:11px; line-height:1.45; }}
+.exec-strip {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }}
+.exec-strip-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px 14px; min-height:98px; }}
+.exec-strip-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:7px; }}
+.exec-strip-v {{ color:{T['text']}; font-size:13px; font-weight:800; line-height:1.5; }}
+.exec-strip-s {{ color:{T['text3']}; font-size:11px; line-height:1.45; margin-top:6px; }}
 .esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,#0B3D2E 72%,{T['panel2']}),color-mix(in srgb,#10281F 58%,{T['panel']})); border:1px solid color-mix(in srgb,#22C55E 42%,{T['border']}); border-radius:9px; padding:17px; position:relative; overflow:hidden; margin-bottom:12px; box-shadow:0 18px 42px rgba(0,0,0,.12); }}
 .esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:rgba(34,197,94,.18); font-size:58px; font-weight:900; letter-spacing:-2px; }}
 .esg-k {{ color:#4ADE80; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
@@ -446,7 +451,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-content {{ padding:30px 24px; }}
   .home-title {{ font-size:34px; }}
   .home-metrics, .home-entry-grid, .home-signal-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
-  .home-command-grid, .home-workflow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .home-command-grid, .home-workflow, .exec-strip {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
 }}
@@ -2509,6 +2514,27 @@ if menu == "🏠 Home":
             st.button("Design", use_container_width=True, on_click=go_to_menu, args=("🎨 Design Intelligence",), key="home_to_design")
         with b5:
             st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Executive Strip</span><span class="p-m">Minimal operating brief</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="exec-strip">
+          <div class="exec-strip-card">
+            <div class="exec-strip-k">Today's Market</div>
+            <div class="exec-strip-v">{html.escape(home_summary["demand"])}</div>
+            <div class="exec-strip-s">수요와 금리 신호를 먼저 확인</div>
+          </div>
+          <div class="exec-strip-card">
+            <div class="exec-strip-k">Cost Signal</div>
+            <div class="exec-strip-v">PVC {d_pvc:+.1f}% · DOTP {d_dotp:+.1f}% · SCFI {d_scfi:+.1f}%</div>
+            <div class="exec-strip-s">견적 전제와 운임 유효기간 체크</div>
+          </div>
+          <div class="exec-strip-card">
+            <div class="exec-strip-k">Next Action</div>
+            <div class="exec-strip-v">{html.escape(str(home_action_text))}</div>
+            <div class="exec-strip-s">{html.escape(str(home_action_area))} 중심 실행 포인트</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with h2:

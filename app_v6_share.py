@@ -339,6 +339,20 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
+.media-card {{ min-height:280px; border-radius:10px; border:1px solid rgba(255,255,255,.13); overflow:hidden; position:relative;
+  background:
+    linear-gradient(110deg,rgba(7,11,18,.94) 0%,rgba(14,35,114,.78) 48%,rgba(7,11,18,.58) 100%),
+    repeating-linear-gradient(135deg,rgba(255,255,255,.06) 0 1px,transparent 1px 18px);
+  display:flex; align-items:center; padding:28px; }}
+.media-card::before {{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 78% 22%,rgba(232,179,57,.22),transparent 31%); pointer-events:none; }}
+.media-card::after {{ content:"KCC"; position:absolute; right:24px; bottom:-14px; color:rgba(255,255,255,.05); font-size:92px; font-weight:900; letter-spacing:-6px; }}
+.media-content {{ position:relative; z-index:1; max-width:560px; }}
+.media-logo {{ height:34px; margin-bottom:28px; }}
+.media-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1.6px; text-transform:uppercase; margin-bottom:10px; }}
+.media-t {{ color:#fff; font-size:25px; font-weight:900; line-height:1.25; margin-bottom:11px; }}
+.media-d {{ color:rgba(255,255,255,.72); font-size:13px; line-height:1.65; margin-bottom:18px; max-width:520px; }}
+.media-link {{ display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:9px 13px; border-radius:7px; background:{T['accent']}; color:#fff !important; font-size:12px; font-weight:900; text-decoration:none !important; }}
+.media-note {{ color:rgba(255,255,255,.45); font-size:10px; margin-top:10px; font-family:'SF Mono','Consolas',monospace; }}
 .home-command-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }}
 .home-command-card {{ background:linear-gradient(135deg,{T['panel2']},color-mix(in srgb,{T['panel']} 78%,#000)); border:1px solid {T['border']}; border-radius:9px; padding:14px; min-height:118px; position:relative; overflow:hidden; box-shadow:0 12px 34px rgba(0,0,0,.10); }}
 .home-command-card::after {{ content:""; position:absolute; width:120px; height:120px; right:-62px; bottom:-72px; border-radius:50%; background:color-mix(in srgb,{GOLD} 13%,transparent); }}
@@ -2528,8 +2542,26 @@ if menu == "🏠 Home":
         with b5:
             st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
         st.markdown('</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">KCC Glass YouTube</span></div><div class="p-guide"><b>활용 포인트</b> 외부 미팅이나 내부 공유 전 회사 공식 영상으로 브랜드 신뢰감을 빠르게 전달할 수 있습니다.</div><div class="p-body">', unsafe_allow_html=True)
-        st.video(KCC_COMPANY_YOUTUBE_URL)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">Network-safe link</span></div><div class="p-guide"><b>활용 포인트</b> 회사망에서 YouTube가 차단되어도 화면이 깨지지 않도록 공식 영상은 링크형 카드로 제공합니다.</div><div class="p-body">', unsafe_allow_html=True)
+        media_logo = f'<img class="media-logo" src="data:image/png;base64,{LOGO_WHITE}"/>' if LOGO_WHITE else '<div class="media-t">KCC GLASS</div>'
+        st.markdown(
+            f"""
+            <div class="media-card">
+              <div class="media-content">
+                {media_logo}
+                <div class="media-k">Official Company Media</div>
+                <div class="media-t">브랜드 소개 영상은 링크로 안전하게 제공합니다.</div>
+                <div class="media-d">
+                  회사 보안 정책상 YouTube 임베드가 차단되는 환경을 고려해, 홈 화면에는 깨지지 않는 미디어 카드만 표시합니다.
+                  영상 확인이 필요한 경우 아래 버튼을 통해 공식 YouTube 페이지로 이동하세요.
+                </div>
+                <a class="media-link" href="{KCC_COMPANY_YOUTUBE_URL}" target="_blank" rel="noopener noreferrer">공식 영상 열기</a>
+                <div class="media-note">If YouTube is blocked by company policy, use this card as a brand reference placeholder.</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with h2:

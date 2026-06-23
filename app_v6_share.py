@@ -150,7 +150,44 @@ st.markdown(f"""
 .sb-group-pages {{ background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.10); border-radius:9px; padding:8px 10px 10px 10px; margin:0 0 10px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
+[data-testid="stSidebar"] [data-testid="stExpander"],
+[data-testid="stSidebar"] [data-testid="stExpander"] details,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:focus,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:active,
+[data-testid="stSidebar"] [data-testid="stExpander"] details[open] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"],
+[data-testid="stSidebar"] details,
+[data-testid="stSidebar"] summary,
+[data-testid="stSidebar"] summary:hover,
+[data-testid="stSidebar"] summary:focus,
+[data-testid="stSidebar"] summary:active,
+[data-testid="stSidebar"] details[open] summary {{
+  background:#1E2F86 !important;
+  background-color:#1E2F86 !important;
+  color:#FFFFFF !important;
+  border-color:rgba(255,255,255,.16) !important;
+  box-shadow:none !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary *,
+[data-testid="stSidebar"] [data-testid="stExpander"] svg,
+[data-testid="stSidebar"] summary *,
+[data-testid="stSidebar"] summary svg {{
+  color:#FFFFFF !important;
+  fill:#FFFFFF !important;
+  stroke:#FFFFFF !important;
+}}
 [data-testid="stSidebar"] .stButton button {{ background:rgba(255,255,255,.06) !important; color:#DDE6FF !important; border:1px solid rgba(255,255,255,.10) !important; border-radius:7px !important; min-height:34px !important; text-align:left !important; justify-content:flex-start !important; font-size:12px !important; font-weight:800 !important; }}
+[data-testid="stSidebar"] .stButton button:focus,
+[data-testid="stSidebar"] .stButton button:active,
+[data-testid="stSidebar"] .stButton button:focus-visible {{
+  background:#253992 !important;
+  color:#FFFFFF !important;
+  border-color:rgba(232,179,57,.65) !important;
+  box-shadow:0 0 0 1px rgba(232,179,57,.25) inset !important;
+  outline:none !important;
+}}
 [data-testid="stSidebar"] .stButton button:hover {{ background:rgba(255,255,255,.13) !important; color:#fff !important; border-color:rgba(232,179,57,.55) !important; }}
 
 /* 모노 폰트 숫자 */

@@ -19,6 +19,7 @@ NEWS_FEEDS = {
     "freight": "https://news.google.com/rss/search?q=container+freight+shipping+rate+SCFI&hl=en-US&gl=US&ceid=US:en",
     "tariff":  "https://news.google.com/rss/search?q=US+tariff+import+flooring+vinyl&hl=en-US&gl=US&ceid=US:en",
     "housing": "https://news.google.com/rss/search?q=US+housing+market+mortgage+construction&hl=en-US&gl=US&ceid=US:en",
+    "kcc_glass": "https://news.google.com/rss/search?q=%22KCC%EA%B8%80%EB%9D%BC%EC%8A%A4%22&hl=ko&gl=KR&ceid=KR:ko",
 }
 
 FCW_URLS = {

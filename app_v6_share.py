@@ -145,69 +145,9 @@ st.markdown(f"""
 .sb-sub {{ font-size:10px; color:#9FB0D9 !important; padding-bottom:14px; border-bottom:1px solid #1E3A8A; margin-bottom:12px; }}
 .sb-nav-label {{ color:#9FB0D9 !important; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin:12px 0 6px 0; }}
 .sb-subnav {{ color:#9FB0D9 !important; font-size:10px; line-height:1.45; margin:2px 0 8px 0; }}
-.sb-active-page {{ background:rgba(255,255,255,.12); border-left:3px solid {GOLD}; border-radius:7px; padding:7px 9px; margin:4px 0 7px 0; color:#fff !important; font-size:12px; font-weight:900; }}
-.sb-group-active {{ background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:9px 10px; margin:8px 0 6px 0; color:#fff !important; font-size:12px; font-weight:900; box-shadow:inset 0 -1px 0 rgba(232,179,57,.28); }}
-.sb-group-pages {{ background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.10); border-radius:9px; padding:8px 10px 10px 10px; margin:0 0 10px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
-[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {{ color:#9FB0D9 !important; font-size:10px !important; font-weight:900 !important; letter-spacing:.8px !important; text-transform:uppercase !important; }}
-[data-testid="stSidebar"] [data-baseweb="select"] > div {{
-  background:#1E2F86 !important;
-  border:1px solid rgba(255,255,255,.16) !important;
-  border-radius:9px !important;
-  color:#FFFFFF !important;
-  min-height:38px !important;
-  box-shadow:none !important;
-}}
-[data-testid="stSidebar"] [data-baseweb="select"] > div:hover,
-[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within {{
-  background:#253992 !important;
-  border-color:rgba(232,179,57,.55) !important;
-  box-shadow:0 0 0 1px rgba(232,179,57,.16) inset !important;
-}}
-[data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] svg {{
-  color:#FFFFFF !important;
-  fill:#FFFFFF !important;
-}}
-[data-testid="stSidebar"] [data-testid="stExpander"],
-[data-testid="stSidebar"] [data-testid="stExpander"] details,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary:focus,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary:active,
-[data-testid="stSidebar"] [data-testid="stExpander"] details[open] summary,
-[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"],
-[data-testid="stSidebar"] details,
-[data-testid="stSidebar"] summary,
-[data-testid="stSidebar"] summary:hover,
-[data-testid="stSidebar"] summary:focus,
-[data-testid="stSidebar"] summary:active,
-[data-testid="stSidebar"] details[open] summary {{
-  background:#1E2F86 !important;
-  background-color:#1E2F86 !important;
-  color:#FFFFFF !important;
-  border-color:rgba(255,255,255,.16) !important;
-  box-shadow:none !important;
-}}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary *,
-[data-testid="stSidebar"] [data-testid="stExpander"] svg,
-[data-testid="stSidebar"] summary *,
-[data-testid="stSidebar"] summary svg {{
-  color:#FFFFFF !important;
-  fill:#FFFFFF !important;
-  stroke:#FFFFFF !important;
-}}
 [data-testid="stSidebar"] .stButton button {{ background:rgba(255,255,255,.06) !important; color:#DDE6FF !important; border:1px solid rgba(255,255,255,.10) !important; border-radius:7px !important; min-height:34px !important; text-align:left !important; justify-content:flex-start !important; font-size:12px !important; font-weight:800 !important; }}
-[data-testid="stSidebar"] .stButton button:focus,
-[data-testid="stSidebar"] .stButton button:active,
-[data-testid="stSidebar"] .stButton button:focus-visible {{
-  background:#253992 !important;
-  color:#FFFFFF !important;
-  border-color:rgba(232,179,57,.65) !important;
-  box-shadow:0 0 0 1px rgba(232,179,57,.25) inset !important;
-  outline:none !important;
-}}
 [data-testid="stSidebar"] .stButton button:hover {{ background:rgba(255,255,255,.13) !important; color:#fff !important; border-color:rgba(232,179,57,.55) !important; }}
 
 /* 모노 폰트 숫자 */
@@ -2387,10 +2327,6 @@ def go_to_menu(target):
     st.session_state.main_menu_group = PAGE_TO_GROUP.get(target, "🏠 Home")
     st.session_state.main_menu = target
 
-def go_to_group(group_name):
-    st.session_state.main_menu_group = group_name
-    st.session_state.main_menu = MENU_GROUPS[group_name][0]
-
 with st.sidebar:
     st.markdown('<div class="sb-brand">LVT INTELLIGENCE</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-sub">KCC Glass · Overseas Sales</div>', unsafe_allow_html=True)
@@ -2403,46 +2339,32 @@ with st.sidebar:
         st.session_state.main_menu = MENU_GROUPS[st.session_state.main_menu_group][0]
     if st.session_state.main_menu not in PAGE_TO_GROUP:
         st.session_state.main_menu = "🏠 Home"
-    st.session_state.main_menu_group = PAGE_TO_GROUP.get(st.session_state.main_menu, "🏠 Home")
 
     st.markdown('<div class="sb-nav-label">Workspace</div>', unsafe_allow_html=True)
-    group_options = list(MENU_GROUPS.keys())
-    if st.session_state.get("nav_group_select") != st.session_state.main_menu_group:
-        st.session_state.nav_group_select = st.session_state.main_menu_group
-    selected_group = st.selectbox(
-        "Workspace",
-        group_options,
-        index=group_options.index(st.session_state.main_menu_group),
+    selected_group = st.radio(
+        "",
+        list(MENU_GROUPS.keys()),
         label_visibility="collapsed",
-        key="nav_group_select",
+        key="main_menu_group",
     )
-    if selected_group != st.session_state.main_menu_group:
-        st.session_state.main_menu_group = selected_group
-        st.session_state.main_menu = MENU_GROUPS[selected_group][0]
-
-    group_pages = MENU_GROUPS[st.session_state.main_menu_group]
-    if st.session_state.main_menu not in group_pages:
+    group_pages = MENU_GROUPS[selected_group]
+    if "main_menu" not in st.session_state or st.session_state.main_menu not in group_pages:
         st.session_state.main_menu = group_pages[0]
-
     if len(group_pages) > 1:
         st.markdown('<div class="sb-nav-label">Section</div>', unsafe_allow_html=True)
-        page_key = f"nav_page_select_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', st.session_state.main_menu_group)}"
-        if st.session_state.get(page_key) != st.session_state.main_menu:
-            st.session_state[page_key] = st.session_state.main_menu
-        selected_page = st.selectbox(
-            "Section",
+        menu = st.radio(
+            "",
             group_pages,
-            index=group_pages.index(st.session_state.main_menu),
             label_visibility="collapsed",
-            key=page_key,
+            key="main_menu",
         )
-        st.session_state.main_menu = selected_page
-        label = re.sub(r"^[^\w가-힣]+", "", st.session_state.main_menu_group).strip()
-        st.markdown(f'<div class="sb-subnav">{label} 안에서 필요한 세부 화면을 선택합니다.</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sb-subnav">{selected_group.replace("💼 ","").replace("🚢 ","").replace("🎨 ","").replace("🏡 ","")} 안에서 필요한 세부 화면을 선택합니다.</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.session_state.main_menu = group_pages[0]
-        st.markdown(f'<div class="sb-active-page">{st.session_state.main_menu}</div>', unsafe_allow_html=True)
-    menu = st.session_state.main_menu
+        menu = group_pages[0]
+        st.session_state.main_menu = menu
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
     # 테마 토글

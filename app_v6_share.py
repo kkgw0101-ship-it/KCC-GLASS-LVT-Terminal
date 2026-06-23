@@ -2510,21 +2510,8 @@ if menu == "🏠 Home":
         with b5:
             st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
         st.markdown('</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">KCC Glass Korean News</span><span class="p-m">Google News KR</span></div><div class="p-guide"><b>활용 포인트</b> 회사 관련 국내 기사 흐름을 가볍게 확인하고, 내부 공유나 상부 보고 전 대외 노출 이슈를 점검합니다.</div><div class="p-body">', unsafe_allow_html=True)
-        kcc_news = llm.fetch_news("kcc_glass", limit=4)
-        if kcc_news:
-            for n in kcc_news[:4]:
-                title = html.escape(n.get("title", ""))
-                link = html.escape(n.get("link", ""))
-                published = html.escape((n.get("published", "") or "")[:16])
-                source = html.escape(n.get("source", "") or "Google News")
-                st.markdown(
-                    f'<div class="news"><a href="{link}" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:850">{title}</a>'
-                    f'<div class="news-t">{published} · {source}</div></div>',
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.markdown('<div class="placeholder"><span style="font-size:24px">NEWS</span><span>KCC글라스 관련 국내 기사를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">KCC Glass YouTube</span></div><div class="p-guide"><b>활용 포인트</b> 외부 미팅이나 내부 공유 전 회사 공식 영상으로 브랜드 신뢰감을 빠르게 전달할 수 있습니다.</div><div class="p-body">', unsafe_allow_html=True)
+        st.video(KCC_COMPANY_YOUTUBE_URL)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     with h2:
@@ -2543,8 +2530,21 @@ if menu == "🏠 Home":
         """, unsafe_allow_html=True)
         st.button("월간 PDF 보고서로 이동", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_report")
         st.markdown('</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">KCC Glass YouTube</span></div><div class="p-guide"><b>활용 포인트</b> 외부 미팅이나 내부 공유 전 회사 공식 영상으로 브랜드 신뢰감을 빠르게 전달할 수 있습니다.</div><div class="p-body">', unsafe_allow_html=True)
-        st.video(KCC_COMPANY_YOUTUBE_URL)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">KCC Glass Korean News</span><span class="p-m">Google News KR</span></div><div class="p-guide"><b>활용 포인트</b> 회사 관련 국내 기사 흐름을 가볍게 확인하고, 내부 공유나 상부 보고 전 대외 노출 이슈를 점검합니다.</div><div class="p-body">', unsafe_allow_html=True)
+        kcc_news = llm.fetch_news("kcc_glass", limit=5)
+        if kcc_news:
+            for n in kcc_news[:5]:
+                title = html.escape(n.get("title", ""))
+                link = html.escape(n.get("link", ""))
+                published = html.escape((n.get("published", "") or "")[:16])
+                source = html.escape(n.get("source", "") or "Google News")
+                st.markdown(
+                    f'<div class="news"><a href="{link}" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:850">{title}</a>'
+                    f'<div class="news-t">{published} · {source}</div></div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown('<div class="placeholder"><span style="font-size:24px">NEWS</span><span>KCC글라스 관련 국내 기사를 불러올 수 없습니다</span></div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Platform Role</span><span class="p-m">Shared operating view</span></div><div class="p-body">', unsafe_allow_html=True)

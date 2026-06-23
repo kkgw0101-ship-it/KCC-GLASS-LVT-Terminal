@@ -383,6 +383,17 @@ st.markdown(f"""
 .upload-wait-icon {{ font-size:32px; margin-bottom:10px; }}
 .upload-wait-t {{ color:{T['text']}; font-size:18px; font-weight:900; margin-bottom:8px; }}
 .upload-wait-d {{ color:{T['text2']}; font-size:13px; line-height:1.7; max-width:720px; }}
+.app-footer {{ margin-top:34px; border-top:1px solid rgba(255,255,255,.10); background:#24262A; border-radius:10px 10px 0 0; overflow:hidden; box-shadow:0 -14px 42px rgba(0,0,0,.18); }}
+.app-footer-top {{ display:flex; justify-content:space-between; align-items:center; gap:18px; padding:13px 18px; background:#303236; border-bottom:1px solid rgba(255,255,255,.08); }}
+.app-footer-links {{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; }}
+.app-footer-links a {{ color:#AAB2C2 !important; text-decoration:none !important; font-size:11px; font-weight:800; }}
+.app-footer-links a:hover {{ color:#fff !important; }}
+.app-footer-badge {{ background:{NAVY}; color:#fff; border-radius:5px; padding:5px 9px; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; }}
+.app-footer-main {{ display:grid; grid-template-columns:220px 1fr auto; gap:22px; align-items:center; padding:22px 20px; background:#202225; }}
+.app-footer-logo {{ height:30px; display:block; }}
+.app-footer-title {{ color:#E7ECF5; font-size:13px; font-weight:900; letter-spacing:.5px; margin-bottom:5px; }}
+.app-footer-copy {{ color:#858E9D; font-size:11px; line-height:1.7; }}
+.app-footer-meta {{ text-align:right; color:#858E9D; font-size:10px; line-height:1.7; font-family:'SF Mono','Consolas',monospace; }}
 .board-grid {{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:10px; margin-bottom:12px; }}
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
@@ -449,6 +460,8 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-command-grid, .home-workflow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
+  .app-footer-main {{ grid-template-columns:1fr; text-align:left; }}
+  .app-footer-meta {{ text-align:left; }}
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -4891,3 +4904,40 @@ elif menu == "💱 FX/Tariff":
 # ════════════════════════════════════════════════════════════
 # 🧮 LANDING COST
 # ════════════════════════════════════════════════════════════
+
+footer_logo = (
+    f'<img class="app-footer-logo" src="data:image/png;base64,{LOGO_WHITE}"/>'
+    if LOGO_WHITE
+    else '<div class="app-footer-title">KCC GLASS</div>'
+)
+st.markdown(
+    f"""
+    <div class="app-footer">
+      <div class="app-footer-top">
+        <div class="app-footer-links">
+          <a href="https://www.kccglass.co.kr/" target="_blank" rel="noopener noreferrer">Official Website</a>
+          <a href="{KCC_ESG_REPORT_PAGE_KO}" target="_blank" rel="noopener noreferrer">ESG Report</a>
+          <a href="https://www.floorcoveringweekly.com/" target="_blank" rel="noopener noreferrer">FCW</a>
+          <a href="https://www.fcnews.net/" target="_blank" rel="noopener noreferrer">FCNews</a>
+        </div>
+        <div class="app-footer-badge">Internal Intelligence</div>
+      </div>
+      <div class="app-footer-main">
+        <div>{footer_logo}</div>
+        <div>
+          <div class="app-footer-title">Global LVT Market Intelligence Platform</div>
+          <div class="app-footer-copy">
+            KCC Glass Overseas Sales · Market, freight, raw material, design, competitor and account signals for internal business reference.
+            Figures are directional indicators and should be checked with official sources before external quotation or disclosure.
+          </div>
+        </div>
+        <div class="app-footer-meta">
+          Updated {datetime.now().strftime("%Y-%m-%d %H:%M")}<br>
+          FRED · Google News · FCW · FCNews · NLIS<br>
+          © {datetime.now().year} KCC Glass Reference Dashboard
+        </div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)

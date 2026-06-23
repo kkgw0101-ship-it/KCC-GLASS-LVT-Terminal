@@ -342,6 +342,16 @@ st.markdown(f"""
 .home-step-no {{ width:30px; height:30px; border-radius:50%; background:{NAVY}; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'SF Mono','Consolas',monospace; font-size:11px; font-weight:900; box-shadow:inset 0 -2px 0 rgba(232,179,57,.55); }}
 .home-step-t {{ color:{T['text']}; font-size:13px; font-weight:900; margin-bottom:4px; }}
 .home-step-d {{ color:{T['text2']}; font-size:11px; line-height:1.45; }}
+.governance-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }}
+.governance-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:13px 14px; min-height:116px; }}
+.governance-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
+.governance-t {{ color:{T['text']}; font-size:14px; font-weight:900; margin-bottom:7px; }}
+.governance-d {{ color:{T['text2']}; font-size:12px; line-height:1.55; }}
+.admin-flow {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:10px; }}
+.admin-step {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:10px; min-height:96px; }}
+.admin-no {{ color:{GOLD}; font-size:10px; font-family:'SF Mono','Consolas',monospace; font-weight:900; margin-bottom:6px; }}
+.admin-t {{ color:{T['text']}; font-size:12px; font-weight:900; margin-bottom:5px; }}
+.admin-d {{ color:{T['text2']}; font-size:11px; line-height:1.45; }}
 .esg-card {{ background:linear-gradient(135deg,color-mix(in srgb,#0B3D2E 72%,{T['panel2']}),color-mix(in srgb,#10281F 58%,{T['panel']})); border:1px solid color-mix(in srgb,#22C55E 42%,{T['border']}); border-radius:9px; padding:17px; position:relative; overflow:hidden; margin-bottom:12px; box-shadow:0 18px 42px rgba(0,0,0,.12); }}
 .esg-card::after {{ content:"ESG"; position:absolute; right:16px; top:8px; color:rgba(34,197,94,.18); font-size:58px; font-weight:900; letter-spacing:-2px; }}
 .esg-k {{ color:#4ADE80; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
@@ -444,6 +454,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-title {{ font-size:34px; }}
   .home-metrics, .home-entry-grid, .home-signal-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-command-grid, .home-workflow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .governance-grid, .admin-flow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
 }}
@@ -1339,10 +1350,14 @@ def last_valid_date(df, col=None, fmt="%Y-%m-%d"):
 def build_update_rows():
     return pd.DataFrame([
         {"데이터": "FRED Housing / Macro", "출처": "FRED API", "최근 기준": max(last_valid_date(df_housing, "주택착공"), last_valid_date(df_cpi, "CPI")), "업데이트": "자동"},
+        {"데이터": "FRED Extended Housing", "출처": "FRED API", "최근 기준": max(last_valid_date(df_permits, "건축허가"), last_valid_date(df_complete, "주택완공")), "업데이트": "자동"},
         {"데이터": "USD/KRW", "출처": "Exchange API + FRED", "최근 기준": datetime.now().strftime("%Y-%m-%d %H:%M"), "업데이트": "자동"},
         {"데이터": "PVC / DOTP", "출처": "구매팀 수기 지수", "최근 기준": last_valid_date(df_purchase, fmt="%Y-%m"), "업데이트": "수기/엑셀"},
         {"데이터": "SCFI / CCFI", "출처": "국가물류통합정보센터", "최근 기준": last_valid_date(df_freight, "SCFI"), "업데이트": "엑셀 반영"},
         {"데이터": "Market Insight", "출처": "내부 조사 자료", "최근 기준": "2026-06-19", "업데이트": "수기"},
+        {"데이터": "Competitor Export", "출처": "ImportYeti 업로드", "최근 기준": "세션 업로드 기준", "업데이트": "관리자 엑셀 업로드"},
+        {"데이터": "Account Map", "출처": "Market Insight + Upload + Google Places", "최근 기준": "세션/Secrets 기준", "업데이트": "엑셀/API"},
+        {"데이터": "Design / News", "출처": "FCW + FCNews", "최근 기준": datetime.now().strftime("%Y-%m-%d"), "업데이트": "자동"},
         {"데이터": "Tariff Brief", "출처": "내부 보고 자료", "최근 기준": "2026-06-19", "업데이트": "수기"},
     ])
 
@@ -1728,9 +1743,9 @@ def create_pdf_report(metrics, summary, ai_briefing=""):
     )
 
     story = [
-        Paragraph("KCC Glass LVT Market Brief", title),
-        Paragraph(f"Executive one-page report | {datetime.now().strftime('%Y-%m-%d %H:%M')} 기준", sub),
-        Paragraph("1. 핵심 요약", head),
+        Paragraph("KCC Glass LVT Executive Market Brief", title),
+        Paragraph(f"Executive one-page report | Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | KCC Glass Overseas Sales", sub),
+        Paragraph("1. Decision Summary", head),
         Paragraph(summary["headline"], body),
         Spacer(1, 5),
     ]
@@ -1753,23 +1768,42 @@ def create_pdf_report(metrics, summary, ai_briefing=""):
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
-    story.extend([Paragraph("2. 주요 지표", head), table, Spacer(1, 6)])
+    story.extend([Paragraph("2. Key Market Signals", head), table, Spacer(1, 6)])
 
     story.extend([
-        Paragraph("3. 시장 해석", head),
+        Paragraph("3. Management Interpretation", head),
         Paragraph(f"- 수요: {summary['demand']}", small),
         Paragraph(f"- 금리: {summary['rate']}", small),
         Paragraph(f"- 비용: {summary['cost']}", small),
         Paragraph(f"- 환율: {summary['fx']}", small),
         Spacer(1, 5),
-        Paragraph("4. 영업 액션 포인트", head),
+        Paragraph("4. Recommended Next Actions", head),
     ])
     for action in summary["actions"]:
         story.append(Paragraph(f"- {action}", small))
 
     if ai_briefing:
         clean_brief = str(ai_briefing).replace("\n", "<br/>")
-        story.extend([Spacer(1, 5), Paragraph("5. AI 브리핑 메모", head), Paragraph(clean_brief[:900], small)])
+        story.extend([Spacer(1, 5), Paragraph("5. AI Briefing Memo", head), Paragraph(clean_brief[:900], small)])
+
+    update_df = build_update_rows().head(6)
+    source_data = [["Data", "Source", "Latest", "Update"]] + update_df.astype(str).values.tolist()
+    source_table = Table(source_data, colWidths=[39*mm, 43*mm, 42*mm, 45*mm])
+    source_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "HYGothic-Medium"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8B339")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#101827")),
+        ("FONTSIZE", (0, 0), (-1, 0), 7.6),
+        ("FONTSIZE", (0, 1), (-1, -1), 6.7),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9E0EA")),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FBFCFE")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.extend([Spacer(1, 5), Paragraph("6. Data Source / Update Basis", head), source_table])
 
     doc.build(story)
     buffer.seek(0)
@@ -1879,6 +1913,95 @@ def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_row
         comment_data = [["월", "카테고리", "코멘트", "작성/수정"]] + cdf[["월", "카테고리", "코멘트", "작성/수정"]].values.tolist()
         story.append(make_table(comment_data, [22*mm, 28*mm, 88*mm, 34*mm]))
 
+    story.extend([PageBreak(), Paragraph("7. Data Source & Update Governance", head)])
+    update_df = build_update_rows().astype(str)
+    update_data = [["데이터", "출처", "최근 기준", "업데이트"]] + update_df.values.tolist()
+    story.append(make_table(update_data, [42*mm, 45*mm, 42*mm, 43*mm]))
+    story.extend([
+        Spacer(1, 7),
+        Paragraph("Admin Update Rule", head),
+        Paragraph("- PVC/DOTP: 구매팀 월별 지수 수령 후 원자재 화면에서 반영하거나 코드 기본값 업데이트", small),
+        Paragraph("- Freight: 국가물류통합정보센터 SCFI/CCFI 엑셀을 검토 후 데이터 파일 반영", small),
+        Paragraph("- ImportYeti: 원본 엑셀은 세션 업로드로만 분석하고 GitHub에는 업로드하지 않음", small),
+        Paragraph("- Secrets: FRED, Claude, Google Places API Key는 Streamlit Secrets에서만 관리", small),
+    ])
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def create_user_guide_pdf():
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    buffer = BytesIO()
+    pdfmetrics.registerFont(UnicodeCIDFont("HYGothic-Medium"))
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=13*mm, leftMargin=13*mm, topMargin=12*mm, bottomMargin=12*mm)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("GTitle", parent=styles["Title"], fontName="HYGothic-Medium", fontSize=18, leading=23, textColor=colors.HexColor("#0E2372"), spaceAfter=6)
+    sub = ParagraphStyle("GSub", parent=styles["Normal"], fontName="HYGothic-Medium", fontSize=8.5, leading=12, textColor=colors.HexColor("#5A6677"), spaceAfter=8)
+    head = ParagraphStyle("GHead", parent=styles["Heading2"], fontName="HYGothic-Medium", fontSize=11.5, leading=15, textColor=colors.HexColor("#0F1722"), spaceBefore=6, spaceAfter=5)
+    body = ParagraphStyle("GBody", parent=styles["BodyText"], fontName="HYGothic-Medium", fontSize=8.8, leading=12.5, textColor=colors.HexColor("#202A38"))
+
+    def make_table(data, widths):
+        table = Table(data, colWidths=widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "HYGothic-Medium"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0E2372")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTSIZE", (0, 1), (-1, -1), 7.6),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#D9E0EA")),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F7F9FC")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return table
+
+    workflow = [
+        ["팀", "먼저 볼 화면", "활용 포인트"],
+        ["영업", "Overview / Market Insight / Account Map", "고객 미팅 전 시장 메시지, 타깃 거래선, 관세·환율 리스크 확인"],
+        ["물류", "Freight / 원자재", "SCFI/CCFI와 운임 뉴스로 선적 타이밍 및 견적 유효기간 판단"],
+        ["구매", "원자재 / Macro", "PVC·DOTP 월별 지수와 유가·자재 가격 보조 신호로 원가 전제 점검"],
+        ["디자인", "Design Intelligence / FCW News", "미국 디자인 키워드, 제품 적용 포인트, 업계 기사 레퍼런스 확인"],
+        ["관리자", "Competitor Export / Account Map", "ImportYeti·거래선 엑셀 업로드 후 세션 기준 분석"],
+    ]
+    admin = [
+        ["업데이트 항목", "방법", "주의"],
+        ["PVC/DOTP", "구매팀 월별 지수 수령 후 원자재 화면 입력", "전체 사용자 고정 반영은 코드/배포 파일 업데이트 필요"],
+        ["SCFI/CCFI", "국가물류통합정보센터 엑셀 검토 후 데이터 파일 반영", "기준일/지수명 확인"],
+        ["ImportYeti", "Competitor Export에서 원본 엑셀 업로드", "원본 파일은 GitHub에 업로드 금지"],
+        ["Google Places", "Streamlit Secrets에 API Key 입력 후 Account Map에서 검색", "키와 과금 관리는 관리자만"],
+        ["월간 보고", "Overview에서 PDF 다운로드", "AI 브리핑을 먼저 생성하면 보고서 메모에 반영"],
+    ]
+
+    story = [
+        Paragraph("KCC Glass LVT Intelligence Terminal User Guide", title),
+        Paragraph(f"One-page operating guide | {datetime.now().strftime('%Y-%m-%d')} 기준", sub),
+        Paragraph("1. 플랫폼 목적", head),
+        Paragraph("미국 LVT 시장의 수요, 비용, 운임, 관세, 디자인 트렌드, 거래선/경쟁사 신호를 한 화면에서 공유해 팀 단위 의사결정과 상부 보고를 빠르게 만드는 업무 포털입니다.", body),
+        Spacer(1, 6),
+        Paragraph("2. 팀별 사용 흐름", head),
+        make_table(workflow, [25*mm, 56*mm, 91*mm]),
+        Spacer(1, 7),
+        Paragraph("3. 관리자 업데이트 기준", head),
+        make_table(admin, [36*mm, 72*mm, 64*mm]),
+        Spacer(1, 7),
+        Paragraph("4. 데이터 출처 / 업데이트 현황", head),
+        make_table([["데이터", "출처", "최근 기준", "업데이트"]] + build_update_rows().astype(str).values.tolist(), [42*mm, 45*mm, 42*mm, 43*mm]),
+        Spacer(1, 7),
+        Paragraph("5. 보안 원칙", head),
+        Paragraph("API Key는 Streamlit Secrets에서만 관리하고, .env, clients.json, ImportYeti 원본, 거래선 원본 엑셀은 GitHub에 올리지 않습니다. 앱 링크 사용자는 Secrets나 Manage app 설정에 접근할 수 없습니다.", body),
+    ]
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -2279,6 +2402,12 @@ if menu == "🏠 Home":
       <div class="home-step"><div class="home-step-no">03</div><div><div class="home-step-t">경쟁사/거래선 확인</div><div class="home-step-d">타깃 거래선과 ImportYeti 업로드 자료로 시장 움직임을 봅니다.</div></div></div>
       <div class="home-step"><div class="home-step-no">04</div><div><div class="home-step-t">보고서로 마감</div><div class="home-step-d">월간 PDF에 핵심 지표와 액션을 묶어 상부 보고에 사용합니다.</div></div></div>
     </div>
+    <div class="governance-grid">
+      <div class="governance-card"><div class="governance-k">Executive Ready</div><div class="governance-t">10초 설명 가능</div><div class="governance-d">수요, 비용, 운임, 관세, 경쟁사, 디자인을 하나의 운영 화면으로 통합했습니다.</div></div>
+      <div class="governance-card"><div class="governance-k">Report Ready</div><div class="governance-t">PDF 보고서</div><div class="governance-d">Overview에서 1페이지 브리프와 월간 종합 리포트를 바로 다운로드합니다.</div></div>
+      <div class="governance-card"><div class="governance-k">Source Ready</div><div class="governance-t">출처/기준 관리</div><div class="governance-d">FRED, 국가물류통합정보센터, 구매팀 지수, FCW/FCNews, Google Places를 구분합니다.</div></div>
+      <div class="governance-card"><div class="governance-k">Admin Ready</div><div class="governance-t">업데이트 흐름</div><div class="governance-d">원자재, 운임, ImportYeti, Account Map은 관리자 업로드 흐름으로 운영합니다.</div></div>
+    </div>
     """, unsafe_allow_html=True)
 
     h1, h2 = st.columns([1.45, 1], gap="medium")
@@ -2321,6 +2450,14 @@ if menu == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
         st.button("월간 PDF 보고서로 이동", use_container_width=True, on_click=go_to_menu, args=("📊 Overview",), key="home_to_report")
+        st.download_button(
+            "📘 사용자 가이드 1장 다운로드",
+            data=create_user_guide_pdf(),
+            file_name=f"kcc_lvt_user_guide_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="home_user_guide_download",
+        )
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Platform Role</span><span class="p-m">Shared operating view</span></div><div class="p-body">', unsafe_allow_html=True)
@@ -2331,6 +2468,22 @@ if menu == "🏠 Home":
       <div class="summary-card"><div class="summary-k">구매/디자인팀</div><div class="summary-v">PVC/DOTP 지수와 미국 디자인 키워드를 함께 보며 제품·가격 전략의 근거를 만듭니다.</div></div>
     </div>
     """, unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Data Source & Admin Update Center</span><span class="p-m">Governance view</span></div><div class="p-guide"><b>운영 원칙</b> 자동 API, 수기 지수, 엑셀 업로드, 뉴스/RSS 데이터의 출처와 업데이트 방식을 분리해 관리합니다.</div><div class="p-body">', unsafe_allow_html=True)
+    source_col, admin_col = st.columns([1.15, 1], gap="medium")
+    with source_col:
+        st.markdown(dataframe_to_dark_table(build_update_rows()), unsafe_allow_html=True)
+    with admin_col:
+        st.markdown("""
+        <div class="admin-flow">
+          <div class="admin-step"><div class="admin-no">01</div><div class="admin-t">PVC/DOTP</div><div class="admin-d">구매팀 월별 지수 수령 후 원자재 화면 또는 코드 기본값 업데이트</div></div>
+          <div class="admin-step"><div class="admin-no">02</div><div class="admin-t">SCFI/CCFI</div><div class="admin-d">국가물류통합정보센터 엑셀 기준일과 지수명 확인 후 반영</div></div>
+          <div class="admin-step"><div class="admin-no">03</div><div class="admin-t">ImportYeti</div><div class="admin-d">원본 엑셀은 세션 업로드만 사용, GitHub 업로드 금지</div></div>
+          <div class="admin-step"><div class="admin-no">04</div><div class="admin-t">Account Map</div><div class="admin-d">거래선 엑셀 또는 Google Places 검색 결과를 세션 지도에 반영</div></div>
+          <div class="admin-step"><div class="admin-no">05</div><div class="admin-t">Report</div><div class="admin-d">Overview에서 AI 브리핑 생성 후 PDF 다운로드</div></div>
+        </div>
+        """, unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown(

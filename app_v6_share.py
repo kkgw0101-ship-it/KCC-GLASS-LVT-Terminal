@@ -145,8 +145,14 @@ st.markdown(f"""
 .sb-sub {{ font-size:10px; color:#9FB0D9 !important; padding-bottom:14px; border-bottom:1px solid #1E3A8A; margin-bottom:12px; }}
 .sb-nav-label {{ color:#9FB0D9 !important; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin:12px 0 6px 0; }}
 .sb-subnav {{ color:#9FB0D9 !important; font-size:10px; line-height:1.45; margin:2px 0 8px 0; }}
+.sb-active-page {{ background:rgba(255,255,255,.12); border-left:3px solid {GOLD}; border-radius:7px; padding:7px 9px; margin:4px 0 7px 0; color:#fff !important; font-size:12px; font-weight:900; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding:7px 10px; border-radius:7px; margin:1px 0; font-size:13px; transition:background 0.15s; }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background:rgba(255,255,255,0.08); }}
+[data-testid="stSidebar"] [data-testid="stExpander"] {{ border:1px solid rgba(255,255,255,.10); border-radius:9px; background:rgba(255,255,255,.035); margin-bottom:8px; overflow:hidden; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary {{ padding:8px 10px !important; font-weight:900 !important; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary p {{ color:#fff !important; font-size:12px !important; font-weight:900 !important; }}
+[data-testid="stSidebar"] .stButton button {{ background:rgba(255,255,255,.06) !important; color:#DDE6FF !important; border:1px solid rgba(255,255,255,.10) !important; border-radius:7px !important; min-height:34px !important; text-align:left !important; justify-content:flex-start !important; font-size:12px !important; font-weight:800 !important; }}
+[data-testid="stSidebar"] .stButton button:hover {{ background:rgba(255,255,255,.13) !important; color:#fff !important; border-color:rgba(232,179,57,.55) !important; }}
 
 /* 모노 폰트 숫자 */
 .mono {{ font-family:'SF Mono','Roboto Mono','Consolas',monospace; font-variant-numeric:tabular-nums; }}
@@ -1775,6 +1781,203 @@ def create_pdf_report(metrics, summary, ai_briefing=""):
     buffer.seek(0)
     return buffer
 
+def create_client_brief_pdf(ctx):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=13*mm, leftMargin=13*mm,
+        topMargin=11*mm, bottomMargin=10*mm
+    )
+    styles = getSampleStyleSheet()
+    navy = colors.HexColor("#0E2372")
+    gold = colors.HexColor("#E8B339")
+    ink = colors.HexColor("#172033")
+    muted = colors.HexColor("#657186")
+    line = colors.HexColor("#D9E1EE")
+    pale = colors.HexColor("#F5F7FB")
+
+    title = ParagraphStyle("ClientTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=16, leading=18, textColor=colors.white, alignment=0)
+    sub = ParagraphStyle("ClientSub", parent=styles["Normal"], fontName="Helvetica", fontSize=7.8, leading=10, textColor=colors.HexColor("#DCE5FF"), alignment=2)
+    h = ParagraphStyle("ClientHead", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=10.2, leading=13, textColor=navy, spaceBefore=4, spaceAfter=4)
+    body = ParagraphStyle("ClientBody", parent=styles["BodyText"], fontName="Helvetica", fontSize=8.7, leading=12.2, textColor=ink)
+    small = ParagraphStyle("ClientSmall", parent=body, fontSize=7.5, leading=10.4, textColor=muted)
+    card_label = ParagraphStyle("CardLabel", parent=small, fontName="Helvetica-Bold", fontSize=6.8, leading=8, textColor=muted)
+    card_value = ParagraphStyle("CardValue", parent=body, fontName="Helvetica-Bold", fontSize=14, leading=16, textColor=ink)
+    card_note = ParagraphStyle("CardNote", parent=small, fontSize=6.9, leading=8.4, textColor=muted)
+    callout = ParagraphStyle("Callout", parent=body, fontName="Helvetica-Bold", fontSize=10, leading=14, textColor=colors.white)
+
+    def esc(value):
+        return html.escape(str(value))
+
+    def num(value, fmt, default="N/A"):
+        try:
+            if value is None or pd.isna(value):
+                return default
+            return fmt.format(value)
+        except Exception:
+            return default
+
+    def bullet(text):
+        return Paragraph(f"- {esc(text)}", body)
+
+    logo_path = os.path.join(os.path.dirname(__file__), "logo_white_t.png")
+    if os.path.exists(logo_path):
+        logo = Image(logo_path, width=36*mm, height=10*mm)
+    else:
+        logo = Paragraph("KCC GLASS", ParagraphStyle("LogoText", parent=title, fontSize=12, leading=14))
+
+    report_date = datetime.now().strftime("%B %d, %Y")
+    header = Table(
+        [[logo, Paragraph("U.S. LVT MARKET INDICATOR BRIEF", title), Paragraph(f"Reference only<br/>{report_date}", sub)]],
+        colWidths=[42*mm, 91*mm, 48*mm],
+        rowHeights=[18*mm],
+    )
+    header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), navy),
+        ("LINEBELOW", (0, 0), (-1, -1), 1.6, gold),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    mortgage = ctx.get("mortgage")
+    scfi_chg = ctx.get("d_scfi")
+    fx_chg = ctx.get("d_fx")
+    wti_chg = ctx.get("d_wti")
+    pvc_chg = ctx.get("d_pvc")
+    dotp_chg = ctx.get("d_dotp")
+
+    headline = "U.S. flooring demand remains rate-sensitive; FX, freight and raw-material signals should be checked before quote finalization."
+    if scfi_chg is not None and scfi_chg >= 8:
+        headline = "Freight cost pressure is rising; quote validity, shipment timing and logistics assumptions should be reviewed carefully."
+    elif fx_chg is not None and abs(fx_chg) >= 2:
+        headline = "FX volatility is elevated; KRW/USD conversion assumptions should be checked before customer communication."
+    elif mortgage is not None and mortgage >= 6.5:
+        headline = "High mortgage rates continue to weigh on U.S. housing sentiment, keeping demand visibility selective."
+
+    callout_table = Table([[Paragraph(headline, callout)]], colWidths=[181*mm])
+    callout_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#172033")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#172033")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    metric_cards = [
+        ("USD/KRW", num(ctx.get("usd_krw"), "{:,.0f}"), num(fx_chg, "20D {:+.1f}%"), "FX reference"),
+        ("30Y Mortgage", num(mortgage, "{:.2f}%"), num(ctx.get("d_mortgage"), "{:+.2f}ppt"), "Demand sentiment"),
+        ("SCFI", num(ctx.get("scfi"), "{:,.0f}"), num(scfi_chg, "4W {:+.1f}%"), "Freight index"),
+        ("WTI", num(ctx.get("wti"), "${:.1f}"), num(wti_chg, "{:+.1f}%"), "Oil and resin signal"),
+        ("CPI", num(ctx.get("cpi"), "{:.1f}"), num(ctx.get("d_cpi"), "{:+.1f}%"), "Inflation backdrop"),
+    ]
+    card_cells = []
+    for label, value, change, note in metric_cards:
+        card_cells.append([
+            Paragraph(label, card_label),
+            Paragraph(value, card_value),
+            Paragraph(change, card_note),
+            Paragraph(note, card_note),
+        ])
+    metrics_table = Table([card_cells], colWidths=[36.2*mm]*5)
+    metrics_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), pale),
+        ("BOX", (0, 0), (-1, -1), 0.4, line),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, line),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+
+    market_read = [
+        f"USD/KRW is at {num(ctx.get('usd_krw'), '{:,.0f}')}, with a {num(fx_chg, '{:+.1f}%')} move over the last 20 trading days.",
+        f"The 30Y mortgage rate is {num(mortgage, '{:.2f}%')}, keeping U.S. housing demand sensitive to financing conditions.",
+        f"SCFI is {num(ctx.get('scfi'), '{:,.0f}')}, showing {num(scfi_chg, '{:+.1f}%')} over the last four weeks.",
+        f"WTI is {num(ctx.get('wti'), '${:.1f}')}; PVC/DOTP purchase indices show {num(pvc_chg, '{:+.1f}%')} / {num(dotp_chg, '{:+.1f}%')} MoM.",
+    ]
+    implications = [
+        "Use FX and freight volatility as context when discussing quote validity periods.",
+        "Treat rate and housing indicators as demand-sentiment references, not as a formal demand forecast.",
+        "Confirm product specification, delivery timing and commercial terms case by case.",
+        "This brief is intended as a market reference for customer discussion and internal alignment.",
+    ]
+    two_col = Table(
+        [[
+            [Paragraph("Market Read", h)] + [bullet(x) for x in market_read],
+            [Paragraph("Commercial Implication", h)] + [bullet(x) for x in implications],
+        ]],
+        colWidths=[88*mm, 88*mm],
+    )
+    two_col.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOX", (0, 0), (-1, -1), 0.4, line),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, line),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+
+    source_rows = [
+        ["Indicator", "Current", "Change / Note", "Business Use"],
+        ["Housing Starts", num(ctx.get("housing"), "{:,.0f}K"), num(ctx.get("d_housing"), "{:+.1f}% MoM"), "U.S. residential demand pulse"],
+        ["New Home Sales", num(ctx.get("newsales"), "{:,.0f}K"), "Monthly release", "Flooring replacement/new-build context"],
+        ["SCFI / CCFI", f"{num(ctx.get('scfi'), '{:,.0f}')} / {num(ctx.get('ccfi'), '{:,.0f}')}", f"{num(scfi_chg, '{:+.1f}%')} / {num(ctx.get('d_ccfi'), '{:+.1f}%')} 4W", "Ocean freight pressure"],
+        ["PVC / DOTP", f"{num(ctx.get('pvc'), '{:,.2f}')} / {num(ctx.get('dotp'), '{:,.2f}')}", f"{num(pvc_chg, '{:+.1f}%')} / {num(dotp_chg, '{:+.1f}%')} MoM", "Raw material cost reference"],
+    ]
+    source_table = Table(source_rows, colWidths=[35*mm, 39*mm, 45*mm, 62*mm], repeatRows=1)
+    source_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("BACKGROUND", (0, 0), (-1, 0), navy),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 7.3),
+        ("FONTSIZE", (0, 1), (-1, -1), 7.1),
+        ("TEXTCOLOR", (0, 1), (-1, -1), ink),
+        ("GRID", (0, 0), (-1, -1), 0.35, line),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+
+    footer = Paragraph(
+        "Disclaimer: This document is a market-reference brief prepared from public indicators and internal monitoring data. "
+        "It is not a price quotation, contract term, market forecast or investment advice. Product specifications, pricing and delivery terms should be confirmed separately.",
+        small,
+    )
+
+    story = [
+        header,
+        Spacer(1, 8),
+        callout_table,
+        Spacer(1, 8),
+        metrics_table,
+        Spacer(1, 8),
+        two_col,
+        Spacer(1, 8),
+        Paragraph("Indicator Detail", h),
+        source_table,
+        Spacer(1, 8),
+        HRFlowable(width="100%", thickness=.4, color=line),
+        Spacer(1, 5),
+        footer,
+    ]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_rows,
                               raw_rows, keyword_df, implication_df, comment_df=None):
     from io import BytesIO
@@ -2136,31 +2339,31 @@ with st.sidebar:
     if st.session_state.main_menu_group not in MENU_GROUPS:
         st.session_state.main_menu_group = "🏠 Home"
 
+    if "main_menu" not in st.session_state:
+        st.session_state.main_menu = MENU_GROUPS[st.session_state.main_menu_group][0]
+    if st.session_state.main_menu not in PAGE_TO_GROUP:
+        st.session_state.main_menu = "🏠 Home"
+    st.session_state.main_menu_group = PAGE_TO_GROUP.get(st.session_state.main_menu, "🏠 Home")
+
     st.markdown('<div class="sb-nav-label">Workspace</div>', unsafe_allow_html=True)
-    selected_group = st.radio(
-        "",
-        list(MENU_GROUPS.keys()),
-        label_visibility="collapsed",
-        key="main_menu_group",
-    )
-    group_pages = MENU_GROUPS[selected_group]
-    if "main_menu" not in st.session_state or st.session_state.main_menu not in group_pages:
-        st.session_state.main_menu = group_pages[0]
-    if len(group_pages) > 1:
-        st.markdown('<div class="sb-nav-label">Section</div>', unsafe_allow_html=True)
-        menu = st.radio(
-            "",
-            group_pages,
-            label_visibility="collapsed",
-            key="main_menu",
-        )
-        st.markdown(
-            f'<div class="sb-subnav">{selected_group.replace("💼 ","").replace("🚢 ","").replace("🎨 ","").replace("🏡 ","")} 안에서 필요한 세부 화면을 선택합니다.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        menu = group_pages[0]
-        st.session_state.main_menu = menu
+    for group_name, group_pages in MENU_GROUPS.items():
+        active_group = st.session_state.main_menu_group == group_name
+        with st.expander(group_name, expanded=active_group):
+            for page_name in group_pages:
+                if page_name == st.session_state.main_menu:
+                    st.markdown(f'<div class="sb-active-page">{page_name}</div>', unsafe_allow_html=True)
+                else:
+                    st.button(
+                        page_name,
+                        key=f"nav_{re.sub(r'[^0-9A-Za-z가-힣]+', '_', page_name)}",
+                        use_container_width=True,
+                        on_click=go_to_menu,
+                        args=(page_name,),
+                    )
+            if active_group and len(group_pages) > 1:
+                label = re.sub(r"^[^\w가-힣]+", "", group_name).strip()
+                st.markdown(f'<div class="sb-subnav">{label} 안에서 필요한 세부 화면을 선택합니다.</div>', unsafe_allow_html=True)
+    menu = st.session_state.main_menu
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
     # 테마 토글
@@ -2773,12 +2976,42 @@ elif menu == "📊 Overview":
         action_rows = "".join([f"<tr><td>{i}</td><td>{a}</td></tr>" for i, a in enumerate(market_summary["actions"], 1)])
         st.markdown(f'<table class="dt"><thead><tr><th>No.</th><th>상부 보고용 액션 포인트</th></tr></thead><tbody>{action_rows}</tbody></table>', unsafe_allow_html=True)
     with r2:
-        st.markdown('<div class="report-note">현재 Overview 지표와 요약을 1페이지 보고서 양식으로 저장합니다. AI 브리핑을 먼저 생성하면 PDF 하단에 함께 반영됩니다.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="report-note">내부 보고용 1페이지 PDF와 거래선 공유용 영문 Market Brief를 각각 다운로드할 수 있습니다.</div>', unsafe_allow_html=True)
         pdf_buffer = create_pdf_report(report_metrics, market_summary, st.session_state.get("market_briefing", ""))
         st.download_button(
             "📄 1페이지 PDF 보고서 다운로드",
             data=pdf_buffer,
             file_name=f"kcc_lvt_market_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+        client_brief_context = {
+            "usd_krw": usd_krw,
+            "d_fx": d_fx,
+            "housing": v_housing,
+            "d_housing": d_housing,
+            "newsales": v_newsales,
+            "mortgage": v_mortgage,
+            "d_mortgage": d_mortgage,
+            "cpi": v_cpi,
+            "d_cpi": d_cpi,
+            "fedfunds": v_fedfunds,
+            "scfi": v_scfi,
+            "d_scfi": d_scfi,
+            "ccfi": v_ccfi,
+            "d_ccfi": d_ccfi,
+            "wti": v_wti,
+            "d_wti": d_wti,
+            "pvc": v_pvc,
+            "d_pvc": d_pvc,
+            "dotp": v_dotp,
+            "d_dotp": d_dotp,
+        }
+        client_pdf_buffer = create_client_brief_pdf(client_brief_context)
+        st.download_button(
+            "🇺🇸 English Client Brief PDF",
+            data=client_pdf_buffer,
+            file_name=f"kcc_glass_us_lvt_indicator_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True,
         )

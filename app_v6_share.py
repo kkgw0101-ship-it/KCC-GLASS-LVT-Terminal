@@ -18,6 +18,11 @@ import json
 import re
 from urllib.parse import quote
 
+APP_DIR = os.path.dirname(__file__)
+PAGE_ICON = os.path.join(APP_DIR, "logo_navy_t.png")
+if not os.path.exists(PAGE_ICON):
+    PAGE_ICON = "📊"
+
 # .env 파일에서 API 키 자동 로드 (있으면 — 매번 set 안 해도 됨)
 try:
     from dotenv import load_dotenv
@@ -29,7 +34,7 @@ import llm_analysis as llm
 
 st.set_page_config(
     page_title="KCC Glass | LVT Terminal",
-    page_icon="📊",
+    page_icon=PAGE_ICON,
     layout="wide",
     initial_sidebar_state="expanded",
 )

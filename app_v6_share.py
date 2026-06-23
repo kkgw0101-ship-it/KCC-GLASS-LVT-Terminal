@@ -19,7 +19,7 @@ import re
 from urllib.parse import quote
 
 APP_DIR = os.path.dirname(__file__)
-PAGE_ICON = os.path.join(APP_DIR, "logo_navy_t.png")
+PAGE_ICON = os.path.join(APP_DIR, "favicon_kcc.png")
 if not os.path.exists(PAGE_ICON):
     PAGE_ICON = "📊"
 

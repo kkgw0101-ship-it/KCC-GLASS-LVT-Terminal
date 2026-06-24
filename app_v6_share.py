@@ -59,6 +59,7 @@ def _logo(path):
         return ""
 LOGO_WHITE = _logo("logo_white_t.png")  # 다크 헤더용 (항상 사용 - 헤더가 네이비)
 LOGO_NAVY  = _logo("logo_navy_t.png")   # 라이트 모드 대비용
+KCC_VIDEO_THUMB = _logo("kcc_company_video_thumb.jpg")
 
 # ── 공식 ESG 리소스 링크 (PDF 파일은 앱에 저장하지 않고 공식 홈페이지 다운로드 URL만 연결) ──
 KCC_ESG_REPORT_PAGE_KO = "https://www.kccglass.co.kr/esgManagement/about/report.do"
@@ -339,20 +340,16 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
-.media-card {{ min-height:280px; border-radius:10px; border:1px solid rgba(255,255,255,.13); overflow:hidden; position:relative;
-  background:
-    linear-gradient(110deg,rgba(7,11,18,.94) 0%,rgba(14,35,114,.78) 48%,rgba(7,11,18,.58) 100%),
-    repeating-linear-gradient(135deg,rgba(255,255,255,.06) 0 1px,transparent 1px 18px);
-  display:flex; align-items:center; padding:28px; }}
-.media-card::before {{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 78% 22%,rgba(232,179,57,.22),transparent 31%); pointer-events:none; }}
-.media-card::after {{ content:"KCC"; position:absolute; right:24px; bottom:-14px; color:rgba(255,255,255,.05); font-size:92px; font-weight:900; letter-spacing:-6px; }}
-.media-content {{ position:relative; z-index:1; max-width:560px; }}
-.media-logo {{ height:34px; margin-bottom:28px; }}
-.media-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1.6px; text-transform:uppercase; margin-bottom:10px; }}
-.media-t {{ color:#fff; font-size:25px; font-weight:900; line-height:1.25; margin-bottom:11px; }}
-.media-d {{ color:rgba(255,255,255,.72); font-size:13px; line-height:1.65; margin-bottom:18px; max-width:520px; }}
-.media-link {{ display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:9px 13px; border-radius:7px; background:{T['accent']}; color:#fff !important; font-size:12px; font-weight:900; text-decoration:none !important; }}
-.media-note {{ color:rgba(255,255,255,.45); font-size:10px; margin-top:10px; font-family:'SF Mono','Consolas',monospace; }}
+.media-card {{ min-height:330px; border-radius:10px; border:1px solid rgba(255,255,255,.13); overflow:hidden; position:relative;
+  background-size:cover; background-position:center; display:flex; align-items:flex-end; text-decoration:none !important; box-shadow:0 18px 44px rgba(0,0,0,.20); }}
+.media-card::before {{ content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(7,11,18,.05) 0%,rgba(7,11,18,.20) 42%,rgba(7,11,18,.78) 100%); pointer-events:none; }}
+.media-card:hover {{ border-color:{T['accent']}; filter:brightness(1.04); }}
+.media-play {{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:70px; height:50px; border-radius:14px; background:#FF0033; color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; box-shadow:0 12px 28px rgba(0,0,0,.35); z-index:1; }}
+.media-content {{ position:relative; z-index:1; width:100%; padding:18px; background:linear-gradient(0deg,rgba(7,11,18,.86),rgba(7,11,18,0)); }}
+.media-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1.3px; text-transform:uppercase; margin-bottom:7px; }}
+.media-t {{ color:#fff; font-size:17px; font-weight:900; line-height:1.35; margin-bottom:5px; }}
+.media-d {{ color:rgba(255,255,255,.68); font-size:11px; line-height:1.5; max-width:620px; }}
+.media-note {{ color:rgba(255,255,255,.48); font-size:10px; margin-top:8px; font-family:'SF Mono','Consolas',monospace; }}
 .home-command-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }}
 .home-command-card {{ background:linear-gradient(135deg,{T['panel2']},color-mix(in srgb,{T['panel']} 78%,#000)); border:1px solid {T['border']}; border-radius:9px; padding:14px; min-height:118px; position:relative; overflow:hidden; box-shadow:0 12px 34px rgba(0,0,0,.10); }}
 .home-command-card::after {{ content:""; position:absolute; width:120px; height:120px; right:-62px; bottom:-72px; border-radius:50%; background:color-mix(in srgb,{GOLD} 13%,transparent); }}
@@ -2542,23 +2539,25 @@ if menu == "🏠 Home":
         with b5:
             st.button("원자재", use_container_width=True, on_click=go_to_menu, args=("🛢 원자재",), key="home_to_raw")
         st.markdown('</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">Network-safe link</span></div><div class="p-guide"><b>활용 포인트</b> 회사망에서 YouTube가 차단되어도 화면이 깨지지 않도록 공식 영상은 링크형 카드로 제공합니다.</div><div class="p-body">', unsafe_allow_html=True)
-        media_logo = f'<img class="media-logo" src="data:image/png;base64,{LOGO_WHITE}"/>' if LOGO_WHITE else '<div class="media-t">KCC GLASS</div>'
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Company Media</span><span class="p-m">Video thumbnail</span></div><div class="p-guide"><b>활용 포인트</b> 회사망에서 YouTube가 차단되어도 화면이 깨지지 않도록 영상 첫 화면 이미지를 로컬 썸네일로 표시합니다.</div><div class="p-body">', unsafe_allow_html=True)
+        media_bg = (
+            f"linear-gradient(180deg,rgba(7,11,18,.02),rgba(7,11,18,.24)), url('data:image/jpeg;base64,{KCC_VIDEO_THUMB}')"
+            if KCC_VIDEO_THUMB
+            else "linear-gradient(110deg,rgba(7,11,18,.94),rgba(14,35,114,.78))"
+        )
         st.markdown(
             f"""
-            <div class="media-card">
+            <a class="media-card" href="{KCC_COMPANY_YOUTUBE_URL}" target="_blank" rel="noopener noreferrer" style="background-image:{media_bg};">
+              <div class="media-play">▶</div>
               <div class="media-content">
-                {media_logo}
                 <div class="media-k">Official Company Media</div>
-                <div class="media-t">브랜드 소개 영상은 링크로 안전하게 제공합니다.</div>
+                <div class="media-t">KCC Glass official video</div>
                 <div class="media-d">
-                  회사 보안 정책상 YouTube 임베드가 차단되는 환경을 고려해, 홈 화면에는 깨지지 않는 미디어 카드만 표시합니다.
-                  영상 확인이 필요한 경우 아래 버튼을 통해 공식 YouTube 페이지로 이동하세요.
+                  회사망에서는 썸네일만 표시하고, YouTube 접속이 가능한 환경에서는 클릭 시 공식 영상으로 이동합니다.
                 </div>
-                <a class="media-link" href="{KCC_COMPANY_YOUTUBE_URL}" target="_blank" rel="noopener noreferrer">공식 영상 열기</a>
-                <div class="media-note">If YouTube is blocked by company policy, use this card as a brand reference placeholder.</div>
+                <div class="media-note">Network-safe thumbnail · Click to open YouTube</div>
               </div>
-            </div>
+            </a>
             """,
             unsafe_allow_html=True,
         )

@@ -169,6 +169,18 @@ st.markdown(f"""
 .tk-l {{ font-size:9px; color:rgba(255,255,255,0.55); letter-spacing:0.5px; text-transform:uppercase; }}
 .tk-v {{ font-size:13px; font-weight:700; color:#fff; font-family:'SF Mono','Consolas',monospace; }}
 .tk-up {{ color:#4ADE80; }} .tk-dn {{ color:#FF6B6E; }}
+.market-marquee {{ height:32px; overflow:hidden; background:#070B12; border:1px solid {T['border']}; border-radius:8px; margin-bottom:8px; display:flex; align-items:center; }}
+.market-track {{ display:flex; width:max-content; animation:marketFlow 48s linear infinite; }}
+.market-marquee:hover .market-track {{ animation-play-state:paused; }}
+.market-set {{ display:flex; align-items:center; flex-shrink:0; min-width:max-content; }}
+.market-item {{ display:inline-flex; align-items:center; gap:8px; padding:0 22px; color:#E4E9F0; font-size:12px; font-weight:900; letter-spacing:.3px; white-space:nowrap; font-family:'SF Mono','Consolas',monospace; }}
+.market-dot {{ width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.74); display:inline-block; }}
+.market-label {{ color:#778397; font-weight:900; text-transform:uppercase; }}
+.market-val {{ color:#F4F7FB; }}
+.market-up {{ color:#4ADE80; }}
+.market-dn {{ color:#FF6B6E; }}
+.market-fl {{ color:#9AA6B6; }}
+@keyframes marketFlow {{ from {{ transform:translateX(0); }} to {{ transform:translateX(-50%); }} }}
 
 /* 섹션 헤더 */
 .sec {{ display:flex; align-items:baseline; gap:10px; margin:2px 0 12px 0; }}
@@ -2424,7 +2436,44 @@ logo_tag = f'<img class="topbar-logo" src="data:image/png;base64,{LOGO_WHITE}"/>
 def tk(label, val, cls=""):
     return f'<div class="tk"><span class="tk-l">{label}</span><span class="tk-v {cls}">{val}</span></div>'
 
+def market_ticker_item(label, value, change=None):
+    if change is None or pd.isna(change):
+        chg = ""
+    else:
+        cls = "market-up" if change > 0 else "market-dn" if change < 0 else "market-fl"
+        arrow = "▲" if change > 0 else "▼" if change < 0 else "•"
+        chg = f'<span class="{cls}">{arrow}{abs(change):.1f}%</span>'
+    return (
+        f'<span class="market-item"><span class="market-dot"></span>'
+        f'<span class="market-label">{html.escape(str(label))}</span>'
+        f'<span class="market-val">{html.escape(str(value))}</span>{chg}</span>'
+    )
+
 scfi_val = v_scfi or st.session_state.get("scfi_now", 2543)
+market_strip = "".join([
+    market_ticker_item("WTI", f"${v_wti:,.1f}", d_wti),
+    market_ticker_item("BRENT", f"${v_brent:,.1f}", d_brent),
+    market_ticker_item("US CPI", f"{v_cpi:,.1f}", d_cpi),
+    market_ticker_item("HOUSING STARTS", f"{v_housing:,.0f}K", d_housing),
+    market_ticker_item("USD/KRW", f"{usd_krw:,.0f}", d_fx),
+    market_ticker_item("SCFI", f"{scfi_val:,.0f}", d_scfi),
+    market_ticker_item("30Y MTG", f"{v_mortgage:.2f}%", d_mortgage),
+    market_ticker_item("FED FUNDS", f"{v_fedfunds:.2f}%"),
+    market_ticker_item("PVC", f"{v_pvc:,.2f}", d_pvc),
+    market_ticker_item("DOTP", f"{v_dotp:,.2f}", d_dotp),
+])
+st.markdown(
+    f"""
+    <div class="market-marquee">
+      <div class="market-track">
+        <div class="market-set">{market_strip}</div>
+        <div class="market-set" aria-hidden="true">{market_strip}</div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 ticker_html = (
     tk("USD/KRW", f"{usd_krw:,.0f}") +
     tk("30Y MTG", f"{v_mortgage:.2f}%") +

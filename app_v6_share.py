@@ -60,6 +60,7 @@ def _logo(path):
 LOGO_WHITE = _logo("logo_white_t.png")  # 다크 헤더용 (항상 사용 - 헤더가 네이비)
 LOGO_NAVY  = _logo("logo_navy_t.png")   # 라이트 모드 대비용
 KCC_VIDEO_THUMB = _logo("kcc_company_video_thumb.jpg")
+KCC_BASKETBALL_IMAGE = _logo("kcc_basketball_champion.png")
 
 # ── 공식 ESG 리소스 링크 (PDF 파일은 앱에 저장하지 않고 공식 홈페이지 다운로드 URL만 연결) ──
 KCC_ESG_REPORT_PAGE_KO = "https://www.kccglass.co.kr/esgManagement/about/report.do"
@@ -75,6 +76,7 @@ def official_doc_url(file_name, file_real_name):
 KCC_ESG_LATEST_KO_URL = official_doc_url("ESG_REPORT_KCCGLASS_2024-2025_07_01.pdf", "ESG_보고서_KCCGLASS")
 KCC_ESG_LATEST_EN_URL = official_doc_url("ESG_REPORT_KCCGLASS_ENG_2024-2025_07_01.pdf", "ESG_REPORT_KCCGLASS_ENG")
 KCC_COMPANY_YOUTUBE_URL = "https://www.youtube.com/watch?v=0bk7OpOAaIE"
+KCC_BASKETBALL_NEWS_URL = "https://news.imbc.com/news/2026/sports/article/6822270_36946.html"
 
 ESG_SUMMARY_ITEMS = [
     {
@@ -352,6 +354,7 @@ st.markdown(f"""
 .home-report-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }}
 .home-report-t {{ color:#fff; font-size:20px; font-weight:900; margin-bottom:7px; }}
 .home-report-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:82%; }}
+.media-grid {{ display:grid; grid-template-columns:1.28fr .92fr; gap:12px; }}
 .media-card {{ min-height:330px; border-radius:10px; border:1px solid rgba(255,255,255,.13); overflow:hidden; position:relative;
   background-size:cover; background-position:center; display:flex; align-items:flex-end; text-decoration:none !important; box-shadow:0 18px 44px rgba(0,0,0,.20); }}
 .media-card::before {{ content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(7,11,18,.05) 0%,rgba(7,11,18,.20) 42%,rgba(7,11,18,.78) 100%); pointer-events:none; }}
@@ -362,6 +365,15 @@ st.markdown(f"""
 .media-t {{ color:#fff; font-size:17px; font-weight:900; line-height:1.35; margin-bottom:5px; }}
 .media-d {{ color:rgba(255,255,255,.68); font-size:11px; line-height:1.5; max-width:620px; }}
 .media-note {{ color:rgba(255,255,255,.48); font-size:10px; margin-top:8px; font-family:'SF Mono','Consolas',monospace; }}
+.brand-moment {{ min-height:330px; border-radius:10px; border:1px solid rgba(232,179,57,.28); overflow:hidden; position:relative; background-size:cover; background-position:center; display:flex; align-items:flex-end; text-decoration:none !important; box-shadow:0 18px 44px rgba(0,0,0,.18); }}
+.brand-moment::before {{ content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(7,11,18,.08) 0%,rgba(7,11,18,.34) 42%,rgba(7,11,18,.88) 100%); pointer-events:none; }}
+.brand-moment:hover {{ border-color:{GOLD}; filter:brightness(1.04); }}
+.brand-content {{ position:relative; z-index:1; width:100%; padding:18px; background:linear-gradient(0deg,rgba(7,11,18,.88),rgba(7,11,18,0)); }}
+.brand-pill {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; background:rgba(232,179,57,.92); color:#111827; font-size:9px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:9px; }}
+.brand-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase; margin-bottom:7px; }}
+.brand-t {{ color:#fff; font-size:17px; font-weight:900; line-height:1.35; margin-bottom:6px; }}
+.brand-d {{ color:rgba(255,255,255,.70); font-size:11px; line-height:1.55; }}
+.brand-note {{ color:rgba(255,255,255,.48); font-size:10px; margin-top:9px; font-family:'SF Mono','Consolas',monospace; }}
 .home-command-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }}
 .home-command-card {{ background:linear-gradient(135deg,{T['panel2']},color-mix(in srgb,{T['panel']} 78%,#000)); border:1px solid {T['border']}; border-radius:9px; padding:14px; min-height:118px; position:relative; overflow:hidden; box-shadow:0 12px 34px rgba(0,0,0,.10); }}
 .home-command-card::after {{ content:""; position:absolute; width:120px; height:120px; right:-62px; bottom:-72px; border-radius:50%; background:color-mix(in srgb,{GOLD} 13%,transparent); }}
@@ -488,6 +500,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .home-command-grid, .home-workflow {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
+  .media-grid {{ grid-template-columns:1fr; }}
   .app-footer-main {{ grid-template-columns:1fr; text-align:left; }}
   .app-footer-meta {{ text-align:left; }}
 }}
@@ -2594,19 +2607,38 @@ if menu == "🏠 Home":
             if KCC_VIDEO_THUMB
             else "linear-gradient(110deg,rgba(7,11,18,.94),rgba(14,35,114,.78))"
         )
+        brand_bg = (
+            f"linear-gradient(180deg,rgba(7,11,18,.02),rgba(7,11,18,.34)), url('data:image/png;base64,{KCC_BASKETBALL_IMAGE}')"
+            if KCC_BASKETBALL_IMAGE
+            else "linear-gradient(110deg,rgba(7,11,18,.94),rgba(14,35,114,.78))"
+        )
         st.markdown(
             f"""
-            <a class="media-card" href="{KCC_COMPANY_YOUTUBE_URL}" target="_blank" rel="noopener noreferrer" style="background-image:{media_bg};">
-              <div class="media-play">▶</div>
-              <div class="media-content">
-                <div class="media-k">Official Company Media</div>
-                <div class="media-t">KCC Glass official video</div>
-                <div class="media-d">
-                  회사망에서는 썸네일만 표시하고, YouTube 접속이 가능한 환경에서는 클릭 시 공식 영상으로 이동합니다.
+            <div class="media-grid">
+              <a class="media-card" href="{KCC_COMPANY_YOUTUBE_URL}" target="_blank" rel="noopener noreferrer" style="background-image:{media_bg};">
+                <div class="media-play">▶</div>
+                <div class="media-content">
+                  <div class="media-k">Official Company Media</div>
+                  <div class="media-t">KCC Glass official video</div>
+                  <div class="media-d">
+                    회사망에서는 썸네일만 표시하고, YouTube 접속이 가능한 환경에서는 클릭 시 공식 영상으로 이동합니다.
+                  </div>
+                  <div class="media-note">Network-safe thumbnail · Click to open YouTube</div>
                 </div>
-                <div class="media-note">Network-safe thumbnail · Click to open YouTube</div>
-              </div>
-            </a>
+              </a>
+              <a class="brand-moment" href="{KCC_BASKETBALL_NEWS_URL}" target="_blank" rel="noopener noreferrer" style="background-image:{brand_bg};">
+                <div class="brand-content">
+                  <div class="brand-pill">KCC Brand Moment</div>
+                  <div class="brand-k">Sports · Corporate Presence</div>
+                  <div class="brand-t">KCC 농구단 우승 소식</div>
+                  <div class="brand-d">
+                    KCC 브랜드가 스포츠와 대중 접점에서도 활발하게 노출되고 있음을 보여주는 참고 콘텐츠입니다.
+                    공식 플랫폼의 브랜드 온도를 자연스럽게 높이는 용도로 배치했습니다.
+                  </div>
+                  <div class="brand-note">MBC News article · Click to read</div>
+                </div>
+              </a>
+            </div>
             """,
             unsafe_allow_html=True,
         )

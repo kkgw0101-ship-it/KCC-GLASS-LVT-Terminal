@@ -77,6 +77,7 @@ KCC_ESG_LATEST_KO_URL = official_doc_url("ESG_REPORT_KCCGLASS_2024-2025_07_01.pd
 KCC_ESG_LATEST_EN_URL = official_doc_url("ESG_REPORT_KCCGLASS_ENG_2024-2025_07_01.pdf", "ESG_REPORT_KCCGLASS_ENG")
 KCC_COMPANY_YOUTUBE_URL = "https://www.youtube.com/watch?v=0bk7OpOAaIE"
 KCC_BASKETBALL_NEWS_URL = "https://news.imbc.com/news/2026/sports/article/6822270_36946.html"
+HOMECC_LVT_DESIGN_LIBRARY_URL = "https://www.homecc.com/lvt/designlibrary.do"
 
 ESG_SUMMARY_ITEMS = [
     {
@@ -278,6 +279,18 @@ st.markdown(f"""
 .mood-card img {{ width:100%; height:100%; object-fit:cover; display:block; filter:saturate(.95) contrast(1.04); }}
 .mood-fallback {{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#24304A,#0E2372 52%,#E8B339); color:white; font-weight:900; letter-spacing:1px; text-align:center; padding:12px; }}
 .mood-overlay {{ position:absolute; left:0; right:0; bottom:0; padding:10px; background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0)); color:#fff; font-size:12px; font-weight:800; line-height:1.3; }}
+.design-library-grid {{ display:grid; grid-template-columns:1.2fr repeat(3,1fr); gap:12px; }}
+.design-library-main {{ min-height:176px; border-radius:9px; border:1px solid color-mix(in srgb,{GOLD} 42%,{T['border']}); background:linear-gradient(135deg,color-mix(in srgb,{NAVY} 88%,#000),color-mix(in srgb,{T['panel2']} 82%,#000)); padding:18px; position:relative; overflow:hidden; text-decoration:none !important; display:flex; flex-direction:column; justify-content:flex-end; }}
+.design-library-main::after {{ content:"LVT"; position:absolute; right:14px; top:6px; color:rgba(255,255,255,.07); font-size:68px; font-weight:900; letter-spacing:-3px; }}
+.design-library-main:hover {{ border-color:{GOLD}; filter:brightness(1.05); }}
+.design-library-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; position:relative; z-index:1; }}
+.design-library-t {{ color:#fff; font-size:22px; line-height:1.2; font-weight:900; margin-bottom:8px; position:relative; z-index:1; }}
+.design-library-d {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:92%; position:relative; z-index:1; }}
+.design-library-cta {{ color:#fff; background:{T['accent']}; display:inline-flex; width:max-content; padding:7px 10px; border-radius:7px; font-size:11px; font-weight:900; margin-top:13px; position:relative; z-index:1; }}
+.design-library-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:9px; padding:14px; min-height:176px; }}
+.design-library-card-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
+.design-library-card-t {{ color:{T['text']}; font-size:14px; font-weight:900; line-height:1.35; margin-bottom:8px; }}
+.design-library-card-d {{ color:{T['text2']}; font-size:12px; line-height:1.55; }}
 
 /* 시뮬레이터 결과 카드 */
 .sim-result {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:16px; text-align:center; }}
@@ -501,6 +514,7 @@ div[data-baseweb="select"] > div {{ background:{T['panel2']}; border-color:{T['b
   .esg-summary-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .home-grid {{ grid-template-columns:1fr; }}
   .media-grid {{ grid-template-columns:1fr; }}
+  .design-library-grid {{ grid-template-columns:1fr; }}
   .app-footer-main {{ grid-template-columns:1fr; text-align:left; }}
   .app-footer-meta {{ text-align:left; }}
 }}
@@ -4491,6 +4505,37 @@ elif menu == "🎨 Design Intelligence":
         pattern_top = taxonomy_df[taxonomy_df["Axis"] == "Pattern"].sort_values("Signal", ascending=False).iloc[0]
         st.metric("Pattern Signal", pattern_top["Trend Bucket"])
 
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">KCC LVT Design Library</span><span class="p-m">Official HomeCC reference</span></div><div class="p-guide"><b>활용 포인트</b> 외부 디자인 트렌드와 우리 신규 디자인 라이브러리를 함께 보며, 고객 미팅 전 제안 가능한 패턴과 컬러 방향을 빠르게 확인합니다.</div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="design-library-grid">
+          <a class="design-library-main" href="{HOMECC_LVT_DESIGN_LIBRARY_URL}" target="_blank" rel="noopener noreferrer">
+            <div class="design-library-k">Official Product Reference</div>
+            <div class="design-library-t">HomeCC LVT<br>Design Library</div>
+            <div class="design-library-d">신규 LVT 디자인과 패턴 레퍼런스를 공식 페이지에서 바로 확인합니다.</div>
+            <div class="design-library-cta">디자인 라이브러리 열기</div>
+          </a>
+          <div class="design-library-card">
+            <div class="design-library-card-k">Design Team</div>
+            <div class="design-library-card-t">트렌드 키워드와 실제 디자인 매칭</div>
+            <div class="design-library-card-d">FCW/FCNews에서 포착한 wood, stone, neutral, texture 키워드를 실제 HomeCC 디자인과 연결해봅니다.</div>
+          </div>
+          <div class="design-library-card">
+            <div class="design-library-card-k">Sales Meeting</div>
+            <div class="design-library-card-t">고객 미팅 전 빠른 레퍼런스 확인</div>
+            <div class="design-library-card-d">거래선 선호 톤에 맞는 디자인 후보를 미리 열어두고, 제품 설명과 시장 트렌드를 함께 전달합니다.</div>
+          </div>
+          <div class="design-library-card">
+            <div class="design-library-card-k">Product Story</div>
+            <div class="design-library-card-t">공식 라이브러리 기반 제안 스토리</div>
+            <div class="design-library-card-d">단순 샘플 소개가 아니라, 시장 기사와 공식 디자인을 묶어 제안 논리를 만들 수 있습니다.</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
     st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">FCW + FCNews scan</span></div><div class="p-body">', unsafe_allow_html=True)
     st.markdown(render_trend_pills(keyword_df), unsafe_allow_html=True)
     kw_col, tax_col = st.columns([1, 1], gap="medium")
@@ -5034,6 +5079,7 @@ st.markdown(
         <div class="app-footer-links">
           <a href="https://www.kccglass.co.kr/" target="_blank" rel="noopener noreferrer">Official Website</a>
           <a href="{KCC_ESG_REPORT_PAGE_KO}" target="_blank" rel="noopener noreferrer">ESG Report</a>
+          <a href="{HOMECC_LVT_DESIGN_LIBRARY_URL}" target="_blank" rel="noopener noreferrer">LVT Design Library</a>
           <a href="https://www.floorcoveringweekly.com/" target="_blank" rel="noopener noreferrer">FCW</a>
           <a href="https://www.fcnews.net/" target="_blank" rel="noopener noreferrer">FCNews</a>
         </div>

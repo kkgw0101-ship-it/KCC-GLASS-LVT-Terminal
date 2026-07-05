@@ -168,11 +168,19 @@ st.markdown(f"""
 .topbar {{ background:{NAVY}; border-bottom:2px solid {GOLD}; border-radius:8px;
   padding:10px 18px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; }}
 .topbar-logo {{ height:24px; }}
+.topbar-brand {{ display:flex; align-items:center; gap:14px; min-width:0; }}
+.topbar-title {{ color:#fff; font-size:13px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; }}
+.topbar-sub {{ color:rgba(255,255,255,.58); font-size:10px; font-weight:700; margin-top:2px; }}
+.topbar-state {{ text-align:right; color:rgba(255,255,255,.62); font-size:10px; font-family:'SF Mono','Consolas',monospace; line-height:1.35; }}
+.topbar-state b {{ color:#fff; font-size:12px; }}
 .ticker {{ display:flex; gap:22px; align-items:center; }}
 .tk {{ display:flex; flex-direction:column; align-items:flex-end; line-height:1.25; }}
 .tk-l {{ font-size:9px; color:rgba(255,255,255,0.55); letter-spacing:0.5px; text-transform:uppercase; }}
 .tk-v {{ font-size:13px; font-weight:700; color:#fff; font-family:'SF Mono','Consolas',monospace; }}
 .tk-up {{ color:#4ADE80; }} .tk-dn {{ color:#FF6B6E; }}
+.data-asof {{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin:-6px 0 14px 0; }}
+.asof-chip {{ display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border:1px solid {T['border']}; border-radius:999px; background:{T['panel']}; color:{T['text2']}; font-size:10px; font-family:'SF Mono','Consolas',monospace; }}
+.asof-chip b {{ color:{GOLD}; font-weight:900; }}
 .market-marquee {{ height:32px; overflow:hidden; background:#070B12; border:1px solid {T['border']}; border-radius:8px; margin-bottom:8px; display:flex; align-items:center; }}
 .market-track {{ display:flex; width:max-content; animation:marketFlow 48s linear infinite; }}
 .market-marquee:hover .market-track {{ animation-play-state:paused; }}
@@ -215,6 +223,9 @@ st.markdown(f"""
   color:{T['text2']}; font-size:12px; line-height:1.55; }}
 .p-guide b {{ color:{GOLD}; font-weight:900; }}
 .p-body {{ padding:14px; }}
+.demo-banner {{ border:1px solid rgba(232,179,57,.55); background:linear-gradient(90deg,rgba(232,179,57,.14),rgba(232,179,57,.04)); border-radius:8px; padding:12px 14px; margin:10px 0 14px 0; color:{T['text']}; }}
+.demo-title {{ font-size:11px; font-weight:900; color:{GOLD}; letter-spacing:.7px; text-transform:uppercase; margin-bottom:4px; }}
+.demo-text {{ font-size:12px; color:{T['text2']}; line-height:1.55; }}
 
 /* 데이터 테이블 */
 .dt {{ width:100%; border-collapse:collapse; font-size:12px; }}
@@ -1424,7 +1435,7 @@ def last_valid_date(df, col=None, fmt="%Y-%m-%d"):
 def build_update_rows():
     return pd.DataFrame([
         {"데이터": "FRED Housing / Macro", "출처": "FRED API", "최근 기준": max(last_valid_date(df_housing, "주택착공"), last_valid_date(df_cpi, "CPI")), "업데이트": "자동"},
-        {"데이터": "USD/KRW", "출처": "Exchange API + FRED", "최근 기준": datetime.now().strftime("%Y-%m-%d %H:%M"), "업데이트": "자동"},
+        {"데이터": "USD/KRW", "출처": "Exchange API + FRED", "최근 기준": f"Live 조회 / FRED {last_valid_date(df_fx, 'USD/KRW')}", "업데이트": "자동"},
         {"데이터": "PVC / DOTP", "출처": "구매팀 수기 지수", "최근 기준": last_valid_date(df_purchase, fmt="%Y-%m"), "업데이트": "수기/엑셀"},
         {"데이터": "SCFI / CCFI", "출처": "국가물류통합정보센터", "최근 기준": last_valid_date(df_freight, "SCFI"), "업데이트": "엑셀 반영"},
         {"데이터": "Market Insight", "출처": "내부 조사 자료", "최근 기준": "2026-06-19", "업데이트": "수기"},
@@ -2467,7 +2478,7 @@ with st.sidebar:
     st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
     fred_ok = "🟢" if api_key and "여기에" not in api_key else "⚪"
     claude_ok = "🟢" if anthropic_key else "⚪"
-    st.markdown(f"<div style='font-size:11px;color:#9FB0D9'>{fred_ok} FRED API<br>{claude_ok} Claude AI<br><span style='color:#6678B0'>Updated {datetime.now().strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:11px;color:#9FB0D9'>{fred_ok} FRED API<br>{claude_ok} Claude AI<br><span style='color:#6678B0'>Session {datetime.now().strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # 상단 티커바 (로고는 항상 흰색 - 네이비 배경)
@@ -2490,14 +2501,32 @@ def market_ticker_item(label, value, change=None):
         f'<span class="market-val">{html.escape(str(value))}</span>{chg}</span>'
     )
 
-scfi_val = v_scfi or st.session_state.get("scfi_now", 2543)
+def asof_chip(label, value):
+    return f'<span class="asof-chip"><span>{html.escape(str(label))}</span><b>{html.escape(str(value))}</b></span>'
+
+def latest_asof(*dates):
+    valid = [d for d in dates if d and d != "N/A"]
+    return max(valid) if valid else "N/A"
+
+fred_asof = latest_asof(
+    last_valid_date(df_housing, "주택착공"),
+    last_valid_date(df_mortgage, "모기지금리"),
+    last_valid_date(df_cpi, "CPI"),
+    last_valid_date(df_fedfunds, "기준금리"),
+    last_valid_date(df_wti, "WTI"),
+    last_valid_date(df_brent, "Brent"),
+)
+fx_asof = f"Live / FRED {last_valid_date(df_fx, 'USD/KRW')}"
+freight_asof = last_valid_date(df_freight, "SCFI")
+purchase_asof = last_valid_date(df_purchase, fmt="%Y-%m")
+scfi_display = f"{v_scfi:,.0f}" if pd.notna(v_scfi) and v_scfi > 0 else "N/A"
 market_strip = "".join([
     market_ticker_item("WTI", f"${v_wti:,.1f}", d_wti),
     market_ticker_item("BRENT", f"${v_brent:,.1f}", d_brent),
     market_ticker_item("US CPI", f"{v_cpi:,.1f}", d_cpi),
     market_ticker_item("HOUSING STARTS", f"{v_housing:,.0f}K", d_housing),
     market_ticker_item("USD/KRW", f"{usd_krw:,.0f}", d_fx),
-    market_ticker_item("SCFI", f"{scfi_val:,.0f}", d_scfi),
+    market_ticker_item("SCFI", scfi_display, d_scfi if scfi_display != "N/A" else None),
     market_ticker_item("30Y MTG", f"{v_mortgage:.2f}%", d_mortgage),
     market_ticker_item("FED FUNDS", f"{v_fedfunds:.2f}%"),
     market_ticker_item("PVC", f"{v_pvc:,.2f}", d_pvc),
@@ -2515,18 +2544,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-ticker_html = (
-    tk("USD/KRW", f"{usd_krw:,.0f}") +
-    tk("30Y MTG", f"{v_mortgage:.2f}%") +
-    tk("FED FUNDS", f"{v_fedfunds:.2f}%") +
-    tk("SCFI", f"{scfi_val:,.0f}", "tk-up" if d_scfi > 0 else "tk-dn") +
-    tk("WTI", f"{v_wti:.1f}", "tk-up" if d_wti > 0 else "tk-dn") +
-    tk("CPI", f"{v_cpi:.1f}")
-)
 st.markdown(f"""
 <div class="topbar">
-  {logo_tag}
-  <div class="ticker">{ticker_html}</div>
+  <div class="topbar-brand">
+    {logo_tag}
+    <div>
+      <div class="topbar-title">LVT Intelligence Terminal</div>
+      <div class="topbar-sub">Market · Cost · Logistics · Design · Sales</div>
+    </div>
+  </div>
+  <div class="topbar-state"><span>Data As-of</span><br><b>Panel-level source dates</b></div>
+</div>
+<div class="data-asof">
+  {asof_chip("FRED", fred_asof)}
+  {asof_chip("FX", fx_asof)}
+  {asof_chip("SCFI/CCFI", freight_asof)}
+  {asof_chip("PVC/DOTP", purchase_asof)}
+  {asof_chip("Loaded", datetime.now().strftime("%Y-%m-%d %H:%M"))}
 </div>
 """, unsafe_allow_html=True)
 
@@ -4321,6 +4355,10 @@ elif menu == "🏭 Competitor Export":
     if df_comp.empty:
         st.markdown(
             """
+            <div class="demo-banner">
+              <div class="demo-title">No Demo Numbers</div>
+              <div class="demo-text">경쟁사 수출 화면은 업로드 전 샘플 수치를 표시하지 않습니다. ImportYeti 원본 엑셀을 넣은 현재 세션에서만 데이터가 생성됩니다.</div>
+            </div>
             <div class="upload-wait">
               <div class="upload-wait-icon">📤</div>
               <div class="upload-wait-t">ImportYeti 원본 엑셀을 업로드하면 분석이 시작됩니다</div>
@@ -4362,7 +4400,7 @@ elif menu == "🏭 Competitor Export":
     view = df_comp[df_comp["competitor"].isin(selected_competitors) & df_comp["month"].isin(selected_months)].copy()
     dest_view = df_dest[df_dest["competitor"].isin(selected_competitors)].copy()
     product_view = df_product[df_product["competitor"].isin(selected_competitors)].copy() if not df_product.empty else df_product.copy()
-    data_mode = "Uploaded raw" if "competitor_export_rows" in st.session_state else "Demo data"
+    data_mode = "Uploaded session data" if "competitor_export_rows" in st.session_state else "No upload"
     total_weight = view["weight_kg"].sum()
     total_shipments = view["shipments"].sum() if "shipments" in view.columns else 0
     latest_month = max(selected_months) if selected_months else ""
@@ -5133,7 +5171,7 @@ st.markdown(
           </div>
         </div>
         <div class="app-footer-meta">
-          Updated {datetime.now().strftime("%Y-%m-%d %H:%M")}<br>
+          Session render {datetime.now().strftime("%Y-%m-%d %H:%M")}<br>
           FRED · Google News · FCW · FCNews · NLIS<br>
           © {datetime.now().year} KCC Glass Reference Dashboard
         </div>

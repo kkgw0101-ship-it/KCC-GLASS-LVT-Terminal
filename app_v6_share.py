@@ -450,6 +450,12 @@ st.markdown(f"""
 .account-v {{ color:{T['text']}; font-size:19px; font-family:'SF Mono','Consolas',monospace; font-weight:900; line-height:1.1; }}
 .account-c {{ color:{T['text2']}; font-size:12px; line-height:1.5; margin-top:7px; }}
 .account-chip {{ display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text2']}; font-size:11px; font-weight:800; margin-right:6px; margin-bottom:6px; }}
+.account-search-summary {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:10px 0 12px 0; }}
+.account-search-card {{ background:linear-gradient(135deg,color-mix(in srgb,{T['accent']} 18%,{T['panel2']}),{T['panel2']}); border:1px solid color-mix(in srgb,{T['accent']} 34%,{T['border']}); border-radius:8px; padding:12px 13px; min-height:90px; }}
+.account-search-k {{ color:{T['text3']}; font-size:10px; text-transform:uppercase; letter-spacing:.8px; font-weight:900; }}
+.account-search-v {{ color:{T['text']}; font-size:20px; font-weight:900; margin-top:5px; font-family:'SF Mono','Consolas',monospace; }}
+.account-search-d {{ color:{T['text2']}; font-size:11px; margin-top:3px; line-height:1.4; }}
+.account-empty-note {{ background:{T['panel2']}; border:1px dashed {T['border']}; border-radius:8px; padding:14px; color:{T['text2']}; font-size:12px; line-height:1.55; margin:8px 0 12px 0; }}
 .upload-done {{ background:color-mix(in srgb,{T['up']} 14%,{T['panel2']}); border:1px solid color-mix(in srgb,{T['up']} 42%,{T['border']}); border-left:4px solid {T['up']}; border-radius:8px; padding:14px 16px; margin:10px 0 14px 0; }}
 .upload-done-t {{ color:{T['text']}; font-size:15px; font-weight:900; margin-bottom:7px; }}
 .upload-done-d {{ color:{T['text2']}; font-size:12px; line-height:1.6; }}
@@ -3977,16 +3983,64 @@ elif menu == "🗺 Account Map":
                             include_contact_fields=include_contact,
                         )
                         existing = get_google_places_account_df()
+                        existing_keys = set(
+                            zip(existing.get("company", pd.Series(dtype=str)).astype(str), existing.get("home_base", pd.Series(dtype=str)).astype(str))
+                        )
+                        places_df["result_status"] = places_df.apply(
+                            lambda r: "Existing" if (str(r.get("company", "")), str(r.get("home_base", ""))) in existing_keys else "New",
+                            axis=1,
+                        )
                         merged = pd.concat([existing, places_df], ignore_index=True)
                         merged = merged.drop_duplicates(subset=["company", "home_base"], keep="first")
                         st.session_state.google_places_rows = merged.to_dict("records")
-                        st.success(f"검색 완료: 신규/기존 포함 {len(merged):,}개 Google Places 후보가 현재 지도에 반영되었습니다.")
+                        st.session_state.google_places_last_search = {
+                            "query": text_query,
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "returned": int(len(places_df)),
+                            "new": int((places_df["result_status"] == "New").sum()),
+                            "existing": int((places_df["result_status"] == "Existing").sum()),
+                            "total_session": int(len(merged)),
+                            "rows": places_df.to_dict("records"),
+                        }
+                        st.success(f"검색 완료: 이번 검색 {len(places_df):,}개 중 신규 {int((places_df['result_status'] == 'New').sum()):,}개가 확인됐고, 총 {len(merged):,}개 Google Places 후보가 현재 지도에 반영되었습니다.")
                     except Exception as e:
                         st.error(f"Google Places 검색 실패: {e}")
         with gpb2:
             if st.session_state.get("google_places_rows") and st.button("Google Places 후보 초기화", use_container_width=True, key="places_reset_btn"):
                 st.session_state.google_places_rows = []
+                st.session_state.pop("google_places_last_search", None)
                 st.rerun()
+        last_search = st.session_state.get("google_places_last_search")
+        if last_search:
+            st.markdown(
+                f"""
+                <div class="account-search-summary">
+                  <div class="account-search-card"><div class="account-search-k">Last Query</div><div class="account-search-v">{last_search.get("returned", 0):,.0f}</div><div class="account-search-d">{html.escape(last_search.get("query", ""))}</div></div>
+                  <div class="account-search-card"><div class="account-search-k">New Leads</div><div class="account-search-v">{last_search.get("new", 0):,.0f}</div><div class="account-search-d">이번 검색에서 새로 확인된 후보</div></div>
+                  <div class="account-search-card"><div class="account-search-k">Existing</div><div class="account-search-v">{last_search.get("existing", 0):,.0f}</div><div class="account-search-d">이미 세션에 있던 후보</div></div>
+                  <div class="account-search-card"><div class="account-search-k">Session Total</div><div class="account-search-v">{last_search.get("total_session", 0):,.0f}</div><div class="account-search-d">현재 지도에 반영된 Google 후보</div></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            last_df = pd.DataFrame(last_search.get("rows", []))
+            if not last_df.empty:
+                last_df = last_df.copy()
+                last_df["Website"] = last_df["website"].apply(
+                    lambda url: f'<a href="{html.escape(str(url))}" target="_blank" rel="noopener noreferrer">Open</a>'
+                    if str(url).strip() and str(url).lower() != "nan" else ""
+                )
+                last_cols = ["result_status", "company", "home_base", "city", "state", "country", "Website", "notes"]
+                last_display = last_df[[c for c in last_cols if c in last_df.columns]].rename(columns={
+                    "result_status": "Status",
+                    "company": "Company",
+                    "home_base": "Address",
+                    "city": "City",
+                    "state": "State/Province",
+                    "country": "Country",
+                    "notes": "Notes",
+                })
+                st.markdown(dataframe_to_dark_table(last_display, max_rows=12), unsafe_allow_html=True)
 
     with st.expander("Account Excel Upload Center — 거래선 후보 리스트 추가", expanded=False):
         st.caption("권장 컬럼: company, category, country, state/province, city, home_base/address, website, notes, lat, lon. 위도/경도가 없으면 주/Province 중심에 자동 배치합니다.")
@@ -4013,6 +4067,30 @@ elif menu == "🗺 Account Map":
     if account_df.empty:
         st.markdown('<div class="placeholder"><span style="font-size:26px">🗺</span><span>표시할 거래선 데이터가 없습니다</span></div>', unsafe_allow_html=True)
     else:
+        last_search = st.session_state.get("google_places_last_search")
+        if last_search:
+            st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Latest Google Places Search Result</span><span class="p-m">{last_search.get("returned", 0):,} returned · {last_search.get("new", 0):,} new</span></div><div class="p-guide"><b>검증 포인트</b> 방금 검색한 키워드가 실제로 어떤 업체를 반환했는지 먼저 확인한 뒤, 아래 지도와 전체 테이블에서 반영 여부를 볼 수 있습니다.</div><div class="p-body">', unsafe_allow_html=True)
+            latest_df = pd.DataFrame(last_search.get("rows", []))
+            if not latest_df.empty:
+                latest_df["Website"] = latest_df["website"].apply(
+                    lambda url: f'<a href="{html.escape(str(url))}" target="_blank" rel="noopener noreferrer">Open</a>'
+                    if str(url).strip() and str(url).lower() != "nan" else ""
+                )
+                latest_cols = ["result_status", "company", "home_base", "city", "state", "country", "Website", "notes"]
+                latest_display = latest_df[[c for c in latest_cols if c in latest_df.columns]].rename(columns={
+                    "result_status": "Status",
+                    "company": "Company",
+                    "home_base": "Address",
+                    "city": "City",
+                    "state": "State/Province",
+                    "country": "Country",
+                    "notes": "Notes",
+                })
+                st.markdown(dataframe_to_dark_table(latest_display, max_rows=8), unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="account-empty-note">최근 Google Places 검색 결과가 비어 있습니다.</div>', unsafe_allow_html=True)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
         a1, a2, a3, a4 = st.columns([1.15, 1, 1, 1], gap="small")
         with a1:
             search_text = st.text_input("Search", placeholder="업체명, 도시, 메모 검색", key="account_search")
@@ -4046,6 +4124,27 @@ elif menu == "🗺 Account Map":
         focused_region = st.selectbox("State / Province Focus", region_options, key="account_region_focus")
         if focused_region != "All Regions":
             filtered = filtered[filtered["state"] == focused_region].copy()
+
+        search_label = search_text.strip() if search_text.strip() else "All accounts"
+        source_label = "All sources" if len(selected_sources) == len(source_opts) else f"{len(selected_sources)} selected sources"
+        category_label = "All categories" if len(selected_account_categories) == len(category_opts) else f"{len(selected_account_categories)} selected categories"
+        country_label = "All countries" if len(selected_countries) == len(country_opts) else " / ".join(selected_countries)
+        st.markdown(
+            f"""
+            <div class="account-search-summary">
+              <div class="account-search-card"><div class="account-search-k">Matched Accounts</div><div class="account-search-v">{len(filtered):,.0f}</div><div class="account-search-d">현재 검색어/필터 기준으로 남은 업체</div></div>
+              <div class="account-search-card"><div class="account-search-k">Search Text</div><div class="account-search-v" style="font-size:14px">{html.escape(search_label)}</div><div class="account-search-d">업체명, 도시, 주소, 메모, 주 코드에서 검색</div></div>
+              <div class="account-search-card"><div class="account-search-k">Source / Category</div><div class="account-search-v" style="font-size:14px">{html.escape(source_label)}</div><div class="account-search-d">{html.escape(category_label)}</div></div>
+              <div class="account-search-card"><div class="account-search-k">Region</div><div class="account-search-v" style="font-size:14px">{html.escape(country_label)}</div><div class="account-search-d">{html.escape(focused_region)}</div></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if filtered.empty:
+            st.markdown(
+                '<div class="account-empty-note"><b>검색 결과가 없습니다.</b><br>검색어를 줄이거나 Source/Category/Country/State 필터를 넓히면 결과를 다시 확인할 수 있습니다. Google Places에서 방금 검색했다면 상단의 최근 검색 결과 표에 실제 반환된 후보가 먼저 표시됩니다.</div>',
+                unsafe_allow_html=True,
+            )
 
         mapped = filtered.dropna(subset=["lat", "lon"]).copy()
         region_summary = (
@@ -4247,28 +4346,32 @@ elif menu == "🗺 Account Map":
                 st.markdown(dataframe_to_dark_table(display_region, max_rows=18), unsafe_allow_html=True)
                 st.markdown('</div></div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Searchable Account Table</span><span class="p-m">Filtered result</span></div><div class="p-body">', unsafe_allow_html=True)
+        table_meta = f"{len(filtered):,} accounts · {html.escape(search_label)}"
+        st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Searchable Account Table</span><span class="p-m">{table_meta}</span></div><div class="p-body">', unsafe_allow_html=True)
         table_df = filtered.copy()
-        table_df["Website"] = table_df["website"].apply(
-            lambda url: f'<a href="{html.escape(str(url))}" target="_blank" rel="noopener noreferrer">Open</a>'
-            if str(url).strip() and str(url).lower() != "nan" else ""
-        )
-        table_df = table_df[["source", "category", "type", "country", "state", "company", "home_base", "Website", "sales", "priority", "notes"]].rename(columns={
-            "source": "Source", "category": "Category", "type": "Type", "country": "Country", "state": "State/Province",
-            "company": "Company", "home_base": "Location", "sales": "Scale", "priority": "Priority", "notes": "Notes",
-        })
-        table_df = table_df.sort_values(["Country", "State/Province", "Category", "Scale", "Company"], ascending=[True, True, True, False, True])
-        st.markdown(dataframe_to_dark_table(table_df), unsafe_allow_html=True)
-        excel_download_button(
-            "📊 Account Map 엑셀 다운로드",
-            {
-                "Filtered Accounts": table_df.drop(columns=["Website"], errors="ignore"),
-                "Region Summary": region_summary,
-                "Raw Account Map": filtered,
-            },
-            f"kcc_lvt_account_map_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            "account_map_excel_download",
-        )
+        if table_df.empty:
+            st.markdown('<div class="account-empty-note">표시할 거래선이 없습니다. 상단 필터를 조정하면 이 표와 지도에 즉시 반영됩니다.</div>', unsafe_allow_html=True)
+        else:
+            table_df["Website"] = table_df["website"].apply(
+                lambda url: f'<a href="{html.escape(str(url))}" target="_blank" rel="noopener noreferrer">Open</a>'
+                if str(url).strip() and str(url).lower() != "nan" else ""
+            )
+            table_df = table_df[["source", "category", "type", "country", "state", "company", "home_base", "Website", "sales", "priority", "notes"]].rename(columns={
+                "source": "Source", "category": "Category", "type": "Type", "country": "Country", "state": "State/Province",
+                "company": "Company", "home_base": "Location", "sales": "Scale", "priority": "Priority", "notes": "Notes",
+            })
+            table_df = table_df.sort_values(["Country", "State/Province", "Category", "Scale", "Company"], ascending=[True, True, True, False, True])
+            st.markdown(dataframe_to_dark_table(table_df), unsafe_allow_html=True)
+            excel_download_button(
+                "📊 Account Map 엑셀 다운로드",
+                {
+                    "Filtered Accounts": table_df.drop(columns=["Website"], errors="ignore"),
+                    "Region Summary": region_summary,
+                    "Raw Account Map": filtered,
+                },
+                f"kcc_lvt_account_map_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "account_map_excel_download",
+            )
         st.caption("현재 핀은 주/Province 중심 좌표 기반입니다. 엑셀에 lat/lon 컬럼을 추가하면 개별 주소 수준의 정확한 위치로 표시할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
 

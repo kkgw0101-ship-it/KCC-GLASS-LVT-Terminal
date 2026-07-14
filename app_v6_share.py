@@ -207,10 +207,16 @@ st.markdown(f"""
 .kpi-strip {{ display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:{T['border']};
   border:1px solid {T['border']}; border-radius:8px; overflow:hidden; margin-bottom:14px; }}
 .kpi {{ background:{T['panel']}; padding:11px 14px; }}
+.kpi.signal-watch {{ box-shadow:inset 0 3px 0 {T['accent']}; }}
+.kpi.signal-warn {{ box-shadow:inset 0 3px 0 {GOLD}; }}
+.kpi.signal-critical {{ box-shadow:inset 0 3px 0 {T['down']}; }}
 .kpi-n {{ font-size:10px; color:{T['text2']}; letter-spacing:0.5px; text-transform:uppercase; font-weight:600; margin-bottom:5px; }}
 .kpi-v {{ font-size:21px; font-weight:700; letter-spacing:-0.5px; line-height:1; color:{T['text']}; font-family:'SF Mono','Consolas',monospace; }}
 .kpi-c {{ font-size:11px; font-weight:600; margin-top:5px; }}
 .up {{ color:{T['up']}; }} .dn {{ color:{T['down']}; }} .fl {{ color:{T['text3']}; }}
+.tip {{ position:relative; display:inline-flex; align-items:center; gap:4px; cursor:help; }}
+.tip::after {{ content:"?"; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:color-mix(in srgb,{T['accent']} 18%,transparent); color:{T['accent']}; font-size:9px; font-weight:900; }}
+.tip:hover::before {{ content:attr(data-tip); position:absolute; left:0; top:18px; z-index:80; width:250px; padding:9px 10px; border-radius:7px; border:1px solid {T['border']}; background:{T['panel2']}; color:{T['text']}; font-size:11px; line-height:1.45; text-transform:none; letter-spacing:0; font-weight:700; box-shadow:0 14px 34px rgba(0,0,0,.24); white-space:normal; }}
 
 /* 패널 */
 .panel {{ background:{T['panel']}; border:1px solid {T['border']}; border-radius:8px; overflow:hidden; margin-bottom:12px; }}
@@ -478,6 +484,16 @@ st.markdown(f"""
 .board-card {{ background:{T['panel2']}; border:1px solid {T['border']}; border-radius:8px; padding:14px; min-height:132px; }}
 .board-k {{ color:{T['text3']}; font-size:10px; font-weight:900; letter-spacing:.7px; text-transform:uppercase; margin-bottom:8px; }}
 .board-v {{ color:{T['text']}; font-size:13px; line-height:1.65; }}
+.exec-hero {{ border:1px solid color-mix(in srgb,{GOLD} 42%,{T['border']}); border-radius:10px; padding:18px; margin-bottom:12px; background:linear-gradient(135deg,color-mix(in srgb,{NAVY} 88%,#000),color-mix(in srgb,{T['panel2']} 72%,#000)); position:relative; overflow:hidden; }}
+.exec-hero::after {{ content:"EXECUTIVE"; position:absolute; right:16px; top:8px; color:rgba(255,255,255,.055); font-size:54px; font-weight:900; letter-spacing:-1px; }}
+.exec-k {{ color:{GOLD}; font-size:10px; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }}
+.exec-title {{ color:#fff; font-size:26px; font-weight:900; line-height:1.22; max-width:1180px; margin-bottom:10px; position:relative; z-index:1; }}
+.exec-sub {{ color:rgba(255,255,255,.72); font-size:12px; line-height:1.6; max-width:980px; position:relative; z-index:1; }}
+.exec-metrics {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:14px; position:relative; z-index:1; }}
+.exec-metric {{ background:rgba(7,11,18,.42); border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:11px 12px; }}
+.exec-metric-k {{ color:rgba(255,255,255,.58); font-size:9px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; margin-bottom:6px; }}
+.exec-metric-v {{ color:#fff; font-family:'SF Mono','Consolas',monospace; font-size:20px; font-weight:900; line-height:1; }}
+.exec-metric-c {{ color:rgba(255,255,255,.62); font-size:10px; margin-top:6px; }}
 .impact-high {{ color:{T['down']}; font-weight:800; }}
 .impact-mid {{ color:{GOLD}; font-weight:800; }}
 .impact-low {{ color:{T['up']}; font-weight:800; }}
@@ -613,6 +629,29 @@ def kpi_change(value, unit="%"):
     cls = "up" if value > 0 else "dn"
     arr = "▲" if value > 0 else "▼"
     return f'<div class="kpi-c {cls}">{arr} {abs(value):.1f}{unit}</div>'
+
+def tip(label, text):
+    return f'<span class="tip" data-tip="{html.escape(str(text), quote=True)}">{html.escape(str(label))}</span>'
+
+def risk_class(kind, value=None, change=None):
+    try:
+        v = float(value) if value is not None and not pd.isna(value) else None
+        c = float(change) if change is not None and not pd.isna(change) else None
+    except Exception:
+        v, c = None, None
+    if kind == "fx":
+        return "signal-critical" if v and v >= 1550 else "signal-warn" if v and v >= 1500 else "signal-watch" if c and abs(c) >= 2 else ""
+    if kind == "mortgage":
+        return "signal-critical" if v and v >= 7.0 else "signal-warn" if v and v >= 6.5 else ""
+    if kind == "scfi":
+        return "signal-critical" if v and v >= 3200 else "signal-warn" if v and v >= 3000 else "signal-watch" if c and c >= 10 else ""
+    if kind == "oil":
+        return "signal-critical" if v and v >= 90 else "signal-warn" if v and v >= 85 else "signal-watch" if c and c >= 5 else ""
+    if kind == "raw":
+        return "signal-warn" if c and c >= 10 else "signal-watch" if c and c >= 5 else ""
+    if kind == "housing":
+        return "signal-warn" if c and c <= -10 else "signal-watch" if c and c <= -5 else ""
+    return ""
 
 def build_market_compare_rows(rows):
     html_rows = ""
@@ -2081,7 +2120,7 @@ def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_row
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, HRFlowable
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
@@ -2092,22 +2131,40 @@ def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_row
         topMargin=12*mm, bottomMargin=12*mm
     )
     styles = getSampleStyleSheet()
-    title = ParagraphStyle("MTitle", parent=styles["Title"], fontName="HYGothic-Medium", fontSize=18, leading=23, textColor=colors.HexColor("#0E2372"), spaceAfter=5)
-    sub = ParagraphStyle("MSub", parent=styles["Normal"], fontName="HYGothic-Medium", fontSize=8.5, leading=12, textColor=colors.HexColor("#5A6677"), spaceAfter=8)
-    head = ParagraphStyle("MHead", parent=styles["Heading2"], fontName="HYGothic-Medium", fontSize=12, leading=15, textColor=colors.HexColor("#0F1722"), spaceBefore=6, spaceAfter=5)
-    body = ParagraphStyle("MBody", parent=styles["BodyText"], fontName="HYGothic-Medium", fontSize=9, leading=13, textColor=colors.HexColor("#202A38"))
+    navy = colors.HexColor("#0E2372")
+    gold = colors.HexColor("#E8B339")
+    ink = colors.HexColor("#172033")
+    muted = colors.HexColor("#5A6677")
+    line = colors.HexColor("#D9E0EA")
+    pale = colors.HexColor("#F7F9FC")
+    title = ParagraphStyle("MTitle", parent=styles["Title"], fontName="HYGothic-Medium", fontSize=17, leading=22, textColor=colors.white, spaceAfter=0)
+    sub = ParagraphStyle("MSub", parent=styles["Normal"], fontName="HYGothic-Medium", fontSize=8, leading=11, textColor=colors.HexColor("#DCE5FF"), spaceAfter=0)
+    head = ParagraphStyle("MHead", parent=styles["Heading2"], fontName="HYGothic-Medium", fontSize=12, leading=15, textColor=ink, spaceBefore=6, spaceAfter=5)
+    body = ParagraphStyle("MBody", parent=styles["BodyText"], fontName="HYGothic-Medium", fontSize=9, leading=13, textColor=ink)
     small = ParagraphStyle("MSmall", parent=body, fontSize=8.1, leading=11.5, textColor=colors.HexColor("#3E4A5A"))
+    callout = ParagraphStyle("MCallout", parent=body, fontSize=10, leading=14, textColor=colors.white)
+
+    def draw_footer(canvas, doc_obj):
+        canvas.saveState()
+        canvas.setStrokeColor(line)
+        canvas.setLineWidth(0.35)
+        canvas.line(13*mm, 10*mm, 197*mm, 10*mm)
+        canvas.setFillColor(muted)
+        canvas.setFont("HYGothic-Medium", 7)
+        canvas.drawString(13*mm, 6.5*mm, "KCC Glass Overseas Sales · Internal Intelligence Reference")
+        canvas.drawRightString(197*mm, 6.5*mm, f"Page {doc_obj.page}")
+        canvas.restoreState()
 
     def make_table(data, widths):
         t = Table(data, colWidths=widths, repeatRows=1)
         t.setStyle(TableStyle([
             ("FONTNAME", (0, 0), (-1, -1), "HYGothic-Medium"),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0E2372")),
+            ("BACKGROUND", (0, 0), (-1, 0), navy),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTSIZE", (0, 0), (-1, 0), 8.2),
             ("FONTSIZE", (0, 1), (-1, -1), 7.8),
-            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D9E0EA")),
-            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F7F9FC")),
+            ("GRID", (0, 0), (-1, -1), 0.35, line),
+            ("BACKGROUND", (0, 1), (-1, -1), pale),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
@@ -2122,12 +2179,43 @@ def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_row
     def pdf_text(value):
         return html.escape(plain_text(value))
 
+    logo_path = os.path.join(os.path.dirname(__file__), "logo_white_t.png")
+    logo = Image(logo_path, width=35*mm, height=10*mm) if os.path.exists(logo_path) else Paragraph("KCC GLASS", title)
+    header = Table(
+        [[
+            logo,
+            Paragraph("LVT MONTHLY INTELLIGENCE REPORT", title),
+            Paragraph(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준<br/>Overview · Freight · Raw Materials · Design", sub),
+        ]],
+        colWidths=[42*mm, 86*mm, 44*mm],
+        rowHeights=[19*mm],
+    )
+    header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), navy),
+        ("LINEBELOW", (0, 0), (-1, -1), 1.5, gold),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    executive_callout = Table(
+        [[Paragraph(pdf_text(summary["headline"]), callout)]],
+        colWidths=[172*mm],
+    )
+    executive_callout.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), ink),
+        ("BOX", (0, 0), (-1, -1), 0.4, ink),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
     story = [
-        Paragraph("KCC Glass LVT Monthly Intelligence Report", title),
-        Paragraph(f"Monthly report | {datetime.now().strftime('%Y-%m-%d %H:%M')} 기준 | Overview · Freight · Raw Materials · Design Trend", sub),
+        header,
+        Spacer(1, 8),
         Paragraph("1. Executive Summary", head),
-        Paragraph(pdf_text(summary["headline"]), body),
-        Spacer(1, 5),
+        executive_callout,
+        Spacer(1, 7),
     ]
 
     metric_table = [["지표", "현재값", "변화/비고"]] + metrics
@@ -2178,7 +2266,14 @@ def create_monthly_pdf_report(metrics, summary, action_recs, alerts, freight_row
         comment_data = [["월", "카테고리", "코멘트", "작성/수정"]] + cdf[["월", "카테고리", "코멘트", "작성/수정"]].values.tolist()
         story.append(make_table(comment_data, [22*mm, 28*mm, 88*mm, 34*mm]))
 
-    doc.build(story)
+    story.extend([
+        Spacer(1, 8),
+        HRFlowable(width="100%", thickness=.4, color=line),
+        Spacer(1, 5),
+        Paragraph("본 보고서는 내부 의사결정 참고용입니다. 대외 견적, 계약 조건, 공식 전망으로 사용하기 전에는 각 원천 데이터와 담당 부서 확인이 필요합니다.", small),
+    ])
+
+    doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
     buffer.seek(0)
     return buffer
 
@@ -2802,12 +2897,12 @@ elif menu == "📊 Overview":
 
     st.markdown(f"""
     <div class="kpi-strip">
-      <div class="kpi"><div class="kpi-n">Housing Starts</div><div class="kpi-v">{v_housing:,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div>{chg(d_housing,"%","MoM")}</div>
-      <div class="kpi"><div class="kpi-n">30Y Mortgage</div><div class="kpi-v">{v_mortgage:.2f}<span style="font-size:12px;color:{T['text3']}">%</span></div>{chg(d_mortgage,"%p")}</div>
-      <div class="kpi"><div class="kpi-n">CPI Index</div><div class="kpi-v">{v_cpi:.1f}</div>{chg(d_cpi,"%")}</div>
+      <div class="kpi {risk_class("housing", v_housing, d_housing)}"><div class="kpi-n">{tip("Housing Starts", "미국 신규 주택착공 흐름입니다. LVT 신규 수요와 builder 채널 분위기를 볼 때 가장 먼저 확인합니다.")}</div><div class="kpi-v">{v_housing:,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div>{chg(d_housing,"%","MoM")}</div>
+      <div class="kpi {risk_class("mortgage", v_mortgage, d_mortgage)}"><div class="kpi-n">{tip("30Y Mortgage", "미국 30년 모기지 금리입니다. 주택거래, 리모델링 심리, 바닥재 수요 민감도를 판단하는 핵심 배경 지표입니다.")}</div><div class="kpi-v">{v_mortgage:.2f}<span style="font-size:12px;color:{T['text3']}">%</span></div>{chg(d_mortgage,"%p")}</div>
+      <div class="kpi"><div class="kpi-n">{tip("CPI Index", "미국 물가 흐름입니다. 금리, 소비심리, 가격저항 분위기를 설명할 때 보조 지표로 활용합니다.")}</div><div class="kpi-v">{v_cpi:.1f}</div>{chg(d_cpi,"%")}</div>
       <div class="kpi"><div class="kpi-n">Fed Funds</div><div class="kpi-v">{v_fedfunds:.2f}<span style="font-size:12px;color:{T['text3']}">%</span></div><div class="kpi-c fl">— policy</div></div>
-      <div class="kpi"><div class="kpi-n">USD / KRW</div><div class="kpi-v">{usd_krw:,.0f}</div><div class="kpi-c fl">실시간</div></div>
-      <div class="kpi"><div class="kpi-n">New Home Sales</div><div class="kpi-v">{latest(df_newsales,'신규주택판매'):,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div><div class="kpi-c fl">월간</div></div>
+      <div class="kpi {risk_class("fx", usd_krw, d_fx)}"><div class="kpi-n">{tip("USD / KRW", "실시간 환율입니다. 원화 환산 매출, 달러 비용, 견적 유효기간을 함께 판단할 때 봅니다.")}</div><div class="kpi-v">{usd_krw:,.0f}</div><div class="kpi-c fl">실시간</div></div>
+      <div class="kpi"><div class="kpi-n">{tip("New Home Sales", "미국 신규주택 판매입니다. 신규 주택 공급과 바닥재 투입 수요를 볼 때 Housing Starts와 함께 확인합니다.")}</div><div class="kpi-v">{latest(df_newsales,'신규주택판매'):,.0f}<span style="font-size:12px;color:{T['text3']}">K</span></div><div class="kpi-c fl">월간</div></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -2840,15 +2935,27 @@ elif menu == "📊 Overview":
     st.markdown(render_watchlist(selected_watch), unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
-    board_mode = st.checkbox("Board Report Mode", value=False, help="상부 보고용으로 핵심 항목만 압축해서 봅니다.")
+    board_mode = st.checkbox("Executive View Mode", value=False, help="회의실/상부 보고용으로 핵심 항목만 크게 압축해서 봅니다.")
     if board_mode:
         top_news = llm.fetch_news("freight", limit=3)
         news_lines = "<br>".join([f'{i+1}. {html.escape(n.get("title", ""))}' for i, n in enumerate(top_news[:3])]) or "주요 뉴스 없음"
         alert_line = "<br>".join([f'{html.escape(a["title"])}: {html.escape(a["value"])}' for a in alerts[:3]]) or "주요 임계값 초과 없음"
         action_line = "<br>".join([f'{i+1}. {html.escape(r["권고 액션"])}' for i, (_, r) in enumerate(action_recs.head(3).iterrows())])
-        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Board Report View</span><span class="p-m">One-page executive mode</span></div><div class="p-body">', unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Executive View</span><span class="p-m">Meeting-room mode</span></div><div class="p-body">', unsafe_allow_html=True)
         st.markdown(
             f"""
+            <div class="exec-hero">
+              <div class="exec-k">Today Executive Brief</div>
+              <div class="exec-title">{html.escape(market_summary["headline"])}</div>
+              <div class="exec-sub">아래 항목만 보면 현재 시장 신호, 비용 압박, 실행 포인트를 회의실 화면에서 빠르게 공유할 수 있습니다.</div>
+              <div class="exec-metrics">
+                <div class="exec-metric"><div class="exec-metric-k">USD/KRW</div><div class="exec-metric-v">{usd_krw:,.0f}</div><div class="exec-metric-c">20D {d_fx:+.1f}%</div></div>
+                <div class="exec-metric"><div class="exec-metric-k">SCFI</div><div class="exec-metric-v">{v_scfi:,.0f}</div><div class="exec-metric-c">4W {d_scfi:+.1f}%</div></div>
+                <div class="exec-metric"><div class="exec-metric-k">PVC / DOTP</div><div class="exec-metric-v">{d_pvc:+.1f}% / {d_dotp:+.1f}%</div><div class="exec-metric-c">MoM purchase index</div></div>
+                <div class="exec-metric"><div class="exec-metric-k">30Y MTG</div><div class="exec-metric-v">{v_mortgage:.2f}%</div><div class="exec-metric-c">Demand sentiment</div></div>
+                <div class="exec-metric"><div class="exec-metric-k">WTI</div><div class="exec-metric-v">{v_wti:.1f}</div><div class="exec-metric-c">{d_wti:+.1f}%</div></div>
+              </div>
+            </div>
             <div class="board-grid">
               <div class="board-card"><div class="board-k">Headline</div><div class="board-v">{html.escape(market_summary["headline"])}</div></div>
               <div class="board-card"><div class="board-k">Risk Signals</div><div class="board-v">{alert_line}</div></div>

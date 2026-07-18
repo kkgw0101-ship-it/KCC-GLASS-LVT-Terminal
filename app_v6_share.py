@@ -4124,10 +4124,18 @@ elif menu == "📄 Customer Brief":
                 st.error("Policy Watch를 포함하려면 검토된 문구와 확인 기준일을 입력해야 합니다.")
             else:
                 with st.spinner("공개 지표와 출처 기준일을 반영해 영문 브리프를 편집하고 있습니다..."):
+                    customer_brief_logo = next(
+                        (
+                            os.path.join(APP_DIR, filename)
+                            for filename in ("kcc_glass_ci_full_color.png", "logo_navy_t.png")
+                            if os.path.isfile(os.path.join(APP_DIR, filename))
+                        ),
+                        None,
+                    )
                     generated = create_customer_market_signal_pdf(
                         customer_brief_context,
                         customer_brief_config,
-                        logo_path=os.path.join(APP_DIR, "kcc_glass_ci_full_color.png"),
+                        logo_path=customer_brief_logo,
                     )
                     st.session_state.customer_brief_pdf = generated.getvalue()
                     st.session_state.customer_brief_file = (

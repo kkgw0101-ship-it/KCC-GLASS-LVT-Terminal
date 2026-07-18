@@ -344,7 +344,16 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
         canvas.drawRightString(A4[0] - 14 * mm, 7 * mm, f"{page} / 4")
         canvas.restoreState()
 
-    logo_file = logo_path if logo_path and os.path.exists(logo_path) else None
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    logo_candidates = [
+        logo_path,
+        os.path.join(module_dir, "kcc_glass_ci_full_color.png"),
+        os.path.join(module_dir, "logo_navy_t.png"),
+    ]
+    logo_file = next(
+        (candidate for candidate in logo_candidates if candidate and os.path.isfile(candidate)),
+        None,
+    )
     if logo_file:
         logo = Image(logo_file, width=39 * mm, height=10 * mm)
     else:

@@ -10,6 +10,7 @@ from io import BytesIO
 import pandas as pd
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.shapes import Drawing, Line, Rect, String
+from reportlab.graphics.widgets.markers import makeMarker
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -17,6 +18,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     HRFlowable,
+    Flowable,
     Image,
     KeepTogether,
     PageBreak,
@@ -37,6 +39,31 @@ SOFT = colors.HexColor("#F2F4F8")
 PALE_BLUE = colors.HexColor("#EEF1F9")
 LINE = colors.HexColor("#D9DCE3")
 LIGHT_GREY = colors.HexColor("#C9CDD4")
+PALE_RED = colors.HexColor("#FDE9EA")
+PALE_GOLD = colors.HexColor("#F7F0DC")
+PALE_GREY = colors.HexColor("#ECEDEF")
+
+
+class _StatusBadge(Flowable):
+    """Compact research-note status badge used in the implications table."""
+
+    def __init__(self, text, fill_color, text_color, width=27 * mm, height=5.2 * mm):
+        super().__init__()
+        self.text = text
+        self.fill_color = fill_color
+        self.text_color = text_color
+        self.width = width
+        self.height = height
+
+    def wrap(self, avail_width, avail_height):
+        return min(self.width, avail_width), self.height
+
+    def draw(self):
+        self.canv.setFillColor(self.fill_color)
+        self.canv.roundRect(0, 0, self.width, self.height, self.height / 2, fill=1, stroke=0)
+        self.canv.setFillColor(self.text_color)
+        self.canv.setFont("Helvetica-Bold", 6.2)
+        self.canv.drawCentredString(self.width / 2, 1.45 * mm, self.text)
 
 
 def _float(value, default=None):
@@ -132,7 +159,12 @@ def _line_chart(labels, series, width=500, height=190, palette=None):
     for i, _ in enumerate(series):
         chart.lines[i].strokeColor = palette[i % len(palette)]
         chart.lines[i].strokeWidth = 2.2 if i == 0 else 1.7
-        chart.lines[i].symbol = None
+        marker = makeMarker("FilledCircle")
+        marker.size = 3.6 if i == 0 else 3.0
+        marker.fillColor = palette[i % len(palette)]
+        marker.strokeColor = colors.white
+        marker.strokeWidth = 0.6
+        chart.lines[i].symbol = marker
     drawing.add(chart)
 
     legend_x = 54
@@ -244,11 +276,38 @@ def _default_kcc_view(ctx):
     freight = "rising" if d_scfi >= 5 else "easing" if d_scfi <= -5 else "stable"
     fx = "volatile" if abs(d_fx) >= 2 else "contained"
     rate_text = "financing conditions remain restrictive" if mortgage is not None and mortgage >= 6 else "financing conditions are becoming less restrictive"
-    return (
-        f"We read the current market as selective, with freight {freight}, FX movement relatively {fx}, and {rate_text}. "
-        "The most practical buyer response is to align inventory, booking timing and quote validity with confirmed project demand rather than rely on one headline indicator. "
-        "KCC Glass will continue to monitor public market signals and flag material changes in the next issue."
-    )
+    return [
+        (
+            f"We read the current market as <b>selective rather than one-directional</b>: freight is {freight}, "
+            f"FX movement is relatively {fx}, and {rate_text}. Public indicators support measured planning, "
+            "but they do not yet point to a broad demand or landed-cost reset."
+        ),
+        (
+            "For buyers, the more actionable variable is <b>timing and visibility</b>. Align inventory with confirmed "
+            "projects, review booking windows against actual lane quotations, and keep quote-validity assumptions explicit. "
+            "KCC Glass will continue to monitor the next freight, housing and FX releases and flag any material inflection."
+        ),
+    ]
+
+
+def _market_read(ctx):
+    d_fx = _change(ctx.get("d_fx"), "20D")
+    d_scfi = _change(ctx.get("d_scfi"), "4W")
+    d_housing = _change(ctx.get("d_housing"), "MoM")
+    d_permits = _change(ctx.get("d_permits"), "MoM")
+    mortgage = _fmt(ctx.get("mortgage"), "{:.2f}%")
+    return [
+        (
+            f"<b>Currency and freight.</b> USD/KRW is {_fmt(ctx.get('usd_krw'), '{:,.0f}')} ({d_fx}), while SCFI is "
+            f"{_fmt(ctx.get('scfi'), '{:,.0f}')} ({d_scfi}). Read these as quote-validity and booking-context signals; "
+            "route-level freight and the actual conversion date still determine the commercial outcome."
+        ),
+        (
+            f"<b>Demand backdrop.</b> Housing starts changed {d_housing}, permits changed {d_permits}, and the 30-year "
+            f"mortgage rate is {mortgage}. The combination supports project- and account-specific planning rather than "
+            "a single broad-market demand call."
+        ),
+    ]
 
 
 def create_customer_market_signal_pdf(ctx, config, logo_path=None):
@@ -273,6 +332,7 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
     small = ParagraphStyle("SignalSmall", parent=body, fontSize=6.8, leading=9.2, textColor=MUTED)
     micro = ParagraphStyle("SignalMicro", parent=small, fontSize=6.2, leading=8.2, textColor=colors.HexColor("#A0A5AE"))
     section = ParagraphStyle("SignalSection", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=NAVY, spaceBefore=2, spaceAfter=5)
+    section_note = ParagraphStyle("SignalSectionNote", parent=small, fontName="Helvetica-Oblique", fontSize=7.2, leading=9.2, alignment=TA_RIGHT, textColor=MUTED)
     card_num = ParagraphStyle("CardNum", parent=small, fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=KCC_RED)
     card_title = ParagraphStyle("CardTitle", parent=body, fontName="Helvetica-Bold", fontSize=8.5, leading=10.5, textColor=NAVY)
     card_body = ParagraphStyle("CardBody", parent=body, fontSize=7.2, leading=10, textColor=colors.HexColor("#4D535E"))
@@ -297,19 +357,22 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
 
     def section_head(number, name):
         badge = Paragraph(f"<b>{number}</b>", ParagraphStyle("Badge", parent=small, fontName="Helvetica-Bold", fontSize=7.3, leading=9, textColor=colors.white, alignment=1))
-        table = Table([[badge, Paragraph(name, section)]], colWidths=[8 * mm, 169 * mm], rowHeights=[8 * mm])
+        table = Table([["", badge, Paragraph(name, section)]], colWidths=[1.5 * mm, 9 * mm, 166.5 * mm], rowHeights=[7.5 * mm])
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, 0), KCC_RED),
+            ("BACKGROUND", (0, 0), (0, 0), NAVY),
+            ("BACKGROUND", (1, 0), (1, 0), KCC_RED),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (0, 0), 2),
             ("RIGHTPADDING", (0, 0), (0, 0), 2),
-            ("LEFTPADDING", (1, 0), (1, 0), 5),
+            ("LEFTPADDING", (1, 0), (1, 0), 2),
+            ("RIGHTPADDING", (1, 0), (1, 0), 2),
+            ("LEFTPADDING", (2, 0), (2, 0), 5),
             ("LINEBELOW", (0, 0), (-1, -1), 0.7, LINE),
         ]))
         return table
 
-    def exhibit(title_text, chart, source_text):
-        title_line = Paragraph(f'<font color="#E30613"><b>Exhibit.</b></font> <b>{_escape(title_text)}</b>', body)
+    def exhibit(number, title_text, chart, source_text):
+        title_line = Paragraph(f'<font color="#E30613"><b>Exhibit {number}.</b></font> <b>{_escape(title_text)}</b>', body)
         source_line = Paragraph(f"Source: {_escape(source_text)}", micro)
         box = Table([[title_line], [chart], [source_line]], colWidths=[177 * mm])
         box.setStyle(TableStyle([
@@ -331,14 +394,14 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
             canvas.setFont("Helvetica-Bold", 6.5)
             canvas.setFillColor(colors.HexColor("#B0B5C0"))
             canvas.drawString(14 * mm, A4[1] - 8.5 * mm, "LVT MARKET SIGNAL")
-            canvas.drawRightString(A4[0] - 14 * mm, A4[1] - 8.5 * mm, "KCC GLASS · PL/LVT EXPORT SALES")
+            canvas.drawRightString(A4[0] - 14 * mm, A4[1] - 8.5 * mm, "KCC GLASS | PL/LVT EXPORT SALES")
         canvas.setStrokeColor(LINE)
         canvas.setLineWidth(0.4)
         canvas.line(14 * mm, 11 * mm, A4[0] - 14 * mm, 11 * mm)
         canvas.setFont("Helvetica", 6.3)
         canvas.setFillColor(colors.HexColor("#A8ADB6"))
-        canvas.drawString(14 * mm, 7 * mm, f"Issue #{issue} · {report_month.strftime('%B %Y')}")
-        canvas.drawCentredString(A4[0] / 2, 7 * mm, "Market-awareness use only · Not a price quotation")
+        canvas.drawString(14 * mm, 7 * mm, f"Issue #{issue} | {report_month.strftime('%B %Y')}")
+        canvas.drawCentredString(A4[0] / 2, 7 * mm, "Market-awareness use only | Not a price quotation")
         canvas.setFont("Helvetica-Bold", 6.5)
         canvas.setFillColor(NAVY)
         canvas.drawRightString(A4[0] - 14 * mm, 7 * mm, f"{page} / 4")
@@ -359,7 +422,7 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
     else:
         logo = Paragraph("KCC GLASS", ParagraphStyle("FallbackLogo", parent=title, fontSize=16, leading=18))
     header = Table(
-        [[logo, Paragraph(f"PL / LVT Export Sales<br/>Market Intelligence Series<br/>Issue #{issue} · {report_month.strftime('%B %Y')}", meta_right)]],
+        [[logo, Paragraph(f"PL / LVT Export Sales<br/>Market Intelligence Series<br/>Issue #{issue} | {report_month.strftime('%B %Y')}", meta_right)]],
         colWidths=[90 * mm, 87 * mm],
     )
     header.setStyle(TableStyle([
@@ -383,18 +446,43 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
 
     cards = []
     for number, heading, text in _summary_cards(ctx):
-        cards.append([Paragraph(number, card_num), Paragraph(_escape(heading), card_title), Paragraph(_escape(text), card_body)])
-    card_table = Table([cards], colWidths=[57.7 * mm] * 3)
+        card = Table(
+            [[Paragraph(number, card_num)], [Paragraph(_escape(heading), card_title)], [Paragraph(_escape(text), card_body)]],
+            colWidths=[55 * mm],
+        )
+        card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), SOFT),
+            ("BOX", (0, 0), (-1, -1), 0.35, LINE),
+            ("LINEABOVE", (0, 0), (-1, 0), 1.5, NAVY),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, 0), 7),
+            ("TOPPADDING", (0, 1), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -2), 2),
+            ("BOTTOMPADDING", (0, -1), (-1, -1), 8),
+        ]))
+        cards.append(card)
+    card_table = Table([cards], colWidths=[59 * mm] * 3)
     card_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), SOFT),
-        ("BOX", (0, 0), (-1, -1), 0.4, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.white),
-        ("LINEABOVE", (0, 0), (-1, -1), 1.3, NAVY),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    summary_header = Table(
+        [[Paragraph("Executive Summary", section), Paragraph("Three signals buyers should watch this month - a 30-second read", section_note)]],
+        colWidths=[62 * mm, 115 * mm],
+    )
+    summary_header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
 
     signal_rows = [
@@ -432,12 +520,12 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
         Paragraph(f"{_escape(region.upper())} FLOORING TRADE BRIEF", eyebrow),
         Spacer(1, 2),
         Paragraph("LVT Market Signal", title),
-        Paragraph(f"A concise read on the macro, freight and cost signals shaping the {region} LVT trade.", subtitle),
+        Paragraph(f"A monthly read on the macro, freight and demand signals shaping the {region} LVT trade.", subtitle),
         Paragraph(f"Prepared by {_escape(prepared_by)} &nbsp; | &nbsp; Data as of {_escape(data_asof)}", small),
         Spacer(1, 7),
         intro,
         Spacer(1, 8),
-        Paragraph("Executive Summary", section),
+        summary_header,
         card_table,
         Spacer(1, 7),
         section_head("01", "Market Signals"),
@@ -446,10 +534,9 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
         Spacer(1, 7),
         section_head("02", "Market Read"),
         Spacer(1, 4),
-        Paragraph(
-            "The combined picture remains selective rather than one-directional. Freight, housing and currency should be read together when planning inventory and customer commitments; no single indicator is a demand forecast on its own.",
-            body,
-        ),
+        Paragraph(_market_read(ctx)[0], body),
+        Spacer(1, 4),
+        Paragraph(_market_read(ctx)[1], body),
         PageBreak(),
     ]
 
@@ -457,14 +544,14 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
     freight_labels, scfi_values = _series_points(ctx.get("freight_df"), "SCFI", periods=7, resample="ME")
     _, ccfi_values = _series_points(ctx.get("freight_df"), "CCFI", periods=7, resample="ME")
     story.extend([
-        exhibit("USD/KRW - seven-month trend", _line_chart(fx_labels, [("USD/KRW", fx_values)], palette=[NAVY]), f"FRED DEXKOUS; data through {asof.get('fx', 'N/A')}"),
+        exhibit("1", "USD/KRW - seven-month trend", _line_chart(fx_labels, [("USD/KRW", fx_values)], palette=[NAVY]), f"FRED DEXKOUS; data through {asof.get('fx', 'N/A')}"),
         Spacer(1, 6),
         Paragraph(
             f"<b>Currency.</b> USD/KRW is {_fmt(ctx.get('usd_krw'), '{:,.0f}')}, a {_change(ctx.get('d_fx'), '20-trading-day')} move. For customer discussion, the most useful application is quote-validity and conversion context rather than a directional FX forecast.",
             body,
         ),
         Spacer(1, 7),
-        exhibit("SCFI and CCFI - recent trend", _line_chart(freight_labels, [("SCFI", scfi_values), ("CCFI", ccfi_values)], palette=[NAVY, GOLD]), f"National Logistics Information Center; data through {asof.get('freight', 'N/A')}"),
+        exhibit("2", "SCFI and CCFI - recent trend", _line_chart(freight_labels, [("SCFI", scfi_values), ("CCFI", ccfi_values)], palette=[NAVY, GOLD]), f"National Logistics Information Center; data through {asof.get('freight', 'N/A')}"),
         Spacer(1, 6),
         Paragraph(
             f"<b>Freight.</b> SCFI is {_fmt(ctx.get('scfi'), '{:,.0f}')} ({_change(ctx.get('d_scfi'), '4W')}) and CCFI is {_fmt(ctx.get('ccfi'), '{:,.0f}')} ({_change(ctx.get('d_ccfi'), '4W')}). Route-level quotes may differ from index direction, so booking decisions should still be checked against the actual lane and shipment window.",
@@ -517,7 +604,7 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     story.extend([
-        exhibit("U.S. housing pipeline - previous vs. latest release", _grouped_bar_chart(categories, previous, current, prev_label, now_label), f"FRED / U.S. Census Bureau; data through {asof.get('housing', 'N/A')}"),
+        exhibit("3", "U.S. housing pipeline - previous vs. latest release", _grouped_bar_chart(categories, previous, current, prev_label, now_label), f"FRED / U.S. Census Bureau; data through {asof.get('housing', 'N/A')}"),
         Spacer(1, 6),
         why_it_matters,
         Spacer(1, 8),
@@ -548,21 +635,64 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
     d_scfi = _float(ctx.get("d_scfi"), 0)
     d_fx = _float(ctx.get("d_fx"), 0)
     mortgage = _float(ctx.get("mortgage"), 0)
-    implication_values = [
-        ["Lever", "Direction", "What it may mean for buyers"],
-        ["Inventory risk", "Measured", "Keep inventory aligned with confirmed project demand. Current public signals do not justify broad defensive over-ordering."],
-        ["Ocean booking timing", "Act early" if d_scfi >= 3 else "Monitor", "Check route-level quotations and reserve capacity around known shipment windows; index direction is a reference, not a booking price."],
-        ["Price visibility", "Mixed" if abs(d_fx) >= 1 or abs(d_scfi) >= 3 else "Steadier", "FX, freight and energy should be reviewed together before assuming a landed-cost direction."],
-        ["Demand focus", "Selective" if mortgage >= 6 else "Improving", "Housing pipeline and financing conditions support account- and project-specific demand planning rather than one broad market call."],
+    d_housing = _float(ctx.get("d_housing"), 0)
+    d_permits = _float(ctx.get("d_permits"), 0)
+
+    if d_scfi >= 8:
+        inventory_status = ("ELEVATED", PALE_RED, KCC_RED)
+        inventory_note = "Freight momentum is elevated. <b>Protect critical lead times</b>, but keep inventory tied to confirmed programs rather than broad defensive over-ordering."
+    elif d_scfi <= -5:
+        inventory_status = ("EASING", PALE_BLUE, NAVY)
+        inventory_note = "Freight is easing from recent levels, reducing the case for precautionary stock. <b>Use measured replenishment</b> while route-level pricing normalizes."
+    else:
+        inventory_status = ("MEASURED", PALE_BLUE, NAVY)
+        inventory_note = "Current public signals support <b>measured inventory</b> aligned with confirmed project demand; they do not justify broad defensive over-ordering."
+
+    if d_scfi >= 3:
+        booking_status = ("ACT EARLY", PALE_GOLD, colors.HexColor("#8B6F1E"))
+        booking_note = "Index momentum favors confirming capacity around known shipment windows. <b>Check actual lane quotations early</b>; an index is directional context, not a booking price."
+    elif d_scfi <= -5:
+        booking_status = ("FLEXIBLE", PALE_BLUE, NAVY)
+        booking_note = "Cooling index momentum may improve optionality. <b>Keep booking windows flexible</b>, while verifying whether the relevant lane has followed the benchmark."
+    else:
+        booking_status = ("MONITOR", PALE_GREY, colors.HexColor("#666A72"))
+        booking_note = "Freight is not showing a decisive break. <b>Monitor capacity and surcharges</b> around the actual shipment window before changing booking cadence."
+
+    if abs(d_fx) >= 2 or abs(d_scfi) >= 8:
+        price_status = ("VOLATILE", PALE_RED, KCC_RED)
+        price_note = "Currency or freight movement remains material. <b>Shorten quote-validity assumptions</b> and review FX, freight and energy together before discussing landed-cost direction."
+    elif abs(d_fx) < 1 and abs(d_scfi) < 3:
+        price_status = ("STEADIER", PALE_BLUE, NAVY)
+        price_note = "FX and freight are comparatively contained. <b>Visibility has improved</b>, although route quotes and the actual conversion date still determine the commercial outcome."
+    else:
+        price_status = ("MIXED", PALE_GREY, colors.HexColor("#666A72"))
+        price_note = "The cost signals are not aligned in one direction. <b>Avoid a single-factor price conclusion</b>; review FX, freight and energy as one landed-cost bridge."
+
+    if d_housing > 3 and d_permits >= 0:
+        demand_status = ("IMPROVING", PALE_BLUE, NAVY)
+        demand_note = "The housing pipeline is becoming more constructive, but financing remains a constraint. <b>Prioritize visible projects and active accounts</b> over a broad-market volume assumption."
+    elif d_housing < -3 and d_permits < 0:
+        demand_status = ("SOFT", PALE_RED, KCC_RED)
+        demand_note = "Starts and permits are both soft. <b>Plan around confirmed programs and replacement demand</b> rather than assuming a near-term new-build recovery."
+    else:
+        demand_status = ("SELECTIVE", PALE_GREY, colors.HexColor("#666A72"))
+        demand_note = f"Housing signals remain mixed and the mortgage rate is {_fmt(mortgage, '{:.2f}%')}. <b>Use account- and project-specific demand planning</b> rather than one broad market call."
+
+    implication_items = [
+        ("Inventory risk", inventory_status, inventory_note),
+        ("Ocean booking timing", booking_status, booking_note),
+        ("Price visibility", price_status, price_note),
+        ("Demand focus", demand_status, demand_note),
     ]
-    implication_rows = [[Paragraph(_escape(cell), table_header) for cell in implication_values[0]]]
-    for row in implication_values[1:]:
+    implication_rows = [[Paragraph(cell, table_header) for cell in ["Lever", "Direction", "What it may mean for buyers"]]]
+    for lever, status, note in implication_items:
+        label, fill_color, text_color = status
         implication_rows.append([
-            Paragraph(_escape(row[0]), table_bold),
-            Paragraph(_escape(row[1]), table_bold),
-            Paragraph(_escape(row[2]), table_body),
+            Paragraph(_escape(lever), table_bold),
+            _StatusBadge(label, fill_color, text_color),
+            Paragraph(note, table_body),
         ])
-    implication_table = Table(implication_rows, colWidths=[40 * mm, 34 * mm, 103 * mm], repeatRows=1)
+    implication_table = Table(implication_rows, colWidths=[41 * mm, 39 * mm, 97 * mm], repeatRows=1)
     implication_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, 1), (1, -1), "Helvetica-Bold"),
@@ -574,15 +704,26 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F6F7F9")]),
         ("LINEBELOW", (0, 1), (-1, -1), 0.35, LINE),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("VALIGN", (1, 1), (1, -1), "MIDDLE"),
+        ("ALIGN", (1, 1), (1, -1), "CENTER"),
         ("LEFTPADDING", (0, 0), (-1, -1), 7),
         ("RIGHTPADDING", (0, 0), (-1, -1), 7),
         ("TOPPADDING", (0, 0), (-1, -1), 7),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
     ]))
-    kcc_view = str(config.get("kcc_view") or _default_kcc_view(ctx)).strip()
+    kcc_view_override = str(config.get("kcc_view") or "").strip()
+    if kcc_view_override:
+        view_texts = [_escape(part.strip()) for part in kcc_view_override.split("\n\n") if part.strip()]
+    else:
+        view_texts = _default_kcc_view(ctx)
+    kcc_view_flowables = []
+    for index, view_text in enumerate(view_texts):
+        if index:
+            kcc_view_flowables.append(Spacer(1, 5))
+        kcc_view_flowables.append(Paragraph(view_text, kcc_body))
     kcc_box = Table([
         [Paragraph("KCC", ParagraphStyle("KccTag", parent=small, fontName="Helvetica-Bold", fontSize=7, leading=8, textColor=colors.white, alignment=1)), Paragraph("View", ParagraphStyle("KccViewTitle", parent=section, textColor=colors.white, fontSize=11, leading=13))],
-        [Paragraph(_escape(kcc_view), kcc_body), ""],
+        [kcc_view_flowables, ""],
     ], colWidths=[14 * mm, 163 * mm])
     kcc_box.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, 0), KCC_RED),
@@ -635,7 +776,7 @@ def create_customer_market_signal_pdf(ctx, config, logo_path=None):
     ]))
     contact_line = f" For questions, please contact {_escape(contact)}." if contact else ""
     disclaimer = Paragraph(
-        "This brief is shared for market-awareness purposes only and does not constitute a price quotation, contract term, market forecast, legal advice or investment advice. Figures are drawn from public sources, may be revised, and should be checked against the latest official release before use." + contact_line + " © KCC Glass Corporation.",
+        "This brief is shared for market-awareness purposes only and does not constitute a price quotation, contract term, market forecast, legal advice or investment advice. Figures are drawn from public sources, may be revised, and should be checked against the latest official release before use." + contact_line + " (c) KCC Glass Corporation.",
         micro,
     )
     story.extend([

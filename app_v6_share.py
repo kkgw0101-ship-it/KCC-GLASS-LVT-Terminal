@@ -31,6 +31,7 @@ except ImportError:
     pass
 
 import llm_analysis as llm
+from customer_brief import create_customer_market_signal_pdf
 
 st.set_page_config(
     page_title="KCC Glass | LVT Terminal",
@@ -2507,7 +2508,7 @@ def build_home_insight(summary, alerts, d_fx, d_scfi, d_pvc, d_dotp):
 MENU_GROUPS = {
     "🏠 Home": ["🏠 Home"],
     "📊 Overview": ["📊 Overview"],
-    "💼 Sales Intelligence": ["🎯 Market Insight", "🗺 Account Map", "🏭 Competitor Export", "💱 FX/Tariff"],
+    "💼 Sales Intelligence": ["🎯 Market Insight", "📄 Customer Brief", "🗺 Account Map", "🏭 Competitor Export", "💱 FX/Tariff"],
     "🚢 Cost & Logistics": ["🛢 원자재", "🚢 Freight"],
     "🎨 Design & News": ["🎨 Design Intelligence", "🧱 Design Library", "📰 FCW News"],
     "🏡 Macro / Housing": ["🏡 Housing", "📈 Macro"],
@@ -3302,42 +3303,12 @@ elif menu == "📊 Overview":
         action_rows = "".join([f"<tr><td>{i}</td><td>{a}</td></tr>" for i, a in enumerate(market_summary["actions"], 1)])
         st.markdown(f'<table class="dt"><thead><tr><th>No.</th><th>상부 보고용 액션 포인트</th></tr></thead><tbody>{action_rows}</tbody></table>', unsafe_allow_html=True)
     with r2:
-        st.markdown('<div class="report-note">내부 보고용 1페이지 PDF와 거래선 공유용 영문 Market Brief를 각각 다운로드할 수 있습니다.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="report-note">이 화면에서는 내부 보고용 자료를 생성합니다. 거래선 배포용 영문 자료는 Sales Intelligence의 Customer Brief에서 검토 후 생성합니다.</div>', unsafe_allow_html=True)
         pdf_buffer = create_pdf_report(report_metrics, market_summary, st.session_state.get("market_briefing", ""))
         st.download_button(
             "📄 1페이지 PDF 보고서 다운로드",
             data=pdf_buffer,
             file_name=f"kcc_lvt_market_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-        client_brief_context = {
-            "usd_krw": usd_krw,
-            "d_fx": d_fx,
-            "housing": v_housing,
-            "d_housing": d_housing,
-            "newsales": v_newsales,
-            "mortgage": v_mortgage,
-            "d_mortgage": d_mortgage,
-            "cpi": v_cpi,
-            "d_cpi": d_cpi,
-            "fedfunds": v_fedfunds,
-            "scfi": v_scfi,
-            "d_scfi": d_scfi,
-            "ccfi": v_ccfi,
-            "d_ccfi": d_ccfi,
-            "wti": v_wti,
-            "d_wti": d_wti,
-            "pvc": v_pvc,
-            "d_pvc": d_pvc,
-            "dotp": v_dotp,
-            "d_dotp": d_dotp,
-        }
-        client_pdf_buffer = create_client_brief_pdf(client_brief_context)
-        st.download_button(
-            "🇺🇸 English Client Brief PDF",
-            data=client_pdf_buffer,
-            file_name=f"kcc_glass_us_lvt_indicator_brief_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True,
         )
@@ -4019,6 +3990,162 @@ elif menu == "🎯 Market Insight":
         )
         st.caption("현재 데이터는 제공된 캡처에서 확인 가능한 항목 기준입니다. 원본 엑셀을 주면 순위와 매출값을 더 정확하게 정리할 수 있습니다.")
         st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# CUSTOMER BRIEF BUILDER
+# ════════════════════════════════════════════════════════════
+elif menu == "📄 Customer Brief":
+    st.markdown('<div class="sec"><span class="sec-t">Customer Brief Builder</span><span class="sec-s">거래선 배포용 KCC LVT Market Signal · Public-data only</span><span class="live"><span class="dot"></span>Review gated</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="panel"><div class="p-head"><span class="p-t">External Sales Enablement</span><span class="p-m">KCC Glass Market Intelligence Series</span></div>'
+        '<div class="p-guide"><b>활용 방식</b> 플랫폼의 공개 지표를 4페이지 영문 리서치 브리프로 변환합니다. 자동 생성 후 담당자가 출처와 문구를 검토한 경우에만 다운로드할 수 있습니다.</div>'
+        '<div class="p-body">',
+        unsafe_allow_html=True,
+    )
+
+    safe_col, excluded_col = st.columns(2, gap="medium")
+    with safe_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Automatically Included</div>'
+            '<div class="summary-v">USD/KRW · SCFI/CCFI · U.S. Housing · Mortgage/Fed Funds · CPI · WTI/Brent<br>'
+            '<span style="color:#7E8A9F;font-size:11px">공개 출처와 지표별 Data as-of를 함께 표시합니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+    with excluded_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Always Excluded</div>'
+            '<div class="summary-v">PVC/DOTP 구매지수 · 경쟁사 수출 추정 · 거래선/리드 · 원가·마진 정보<br>'
+            '<span style="color:#7E8A9F;font-size:11px">내부 또는 민감 데이터는 외부 PDF에 전달되지 않습니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    f1, f2, f3 = st.columns([0.7, 1.15, 1.15], gap="medium")
+    with f1:
+        brief_issue = st.text_input("Issue number", value="01", max_chars=3, key="customer_brief_issue")
+        brief_month = st.date_input("Report month", value=datetime.now().date(), key="customer_brief_month")
+    with f2:
+        brief_region = st.selectbox("Market / audience", ["North America", "United States", "Canada"], key="customer_brief_region")
+        brief_prepared_by = st.text_input("Prepared by", value="KCC Glass PL/LVT Export Sales Team", key="customer_brief_prepared_by")
+    with f3:
+        brief_contact = st.text_input("Contact shown in disclaimer (optional)", placeholder="Kent Kim · kent.kim@company.com", key="customer_brief_contact")
+        include_policy = st.checkbox("Include manually verified policy watch", value=False, key="customer_brief_include_policy")
+
+    policy_note = ""
+    if include_policy:
+        policy_note = st.text_area(
+            "Verified policy watch note",
+            placeholder="Enter only a policy/tariff statement that has been checked against the latest official source. Include the verification date.",
+            height=90,
+            key="customer_brief_policy_note",
+        )
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Editorial Review</span><span class="p-m">Human-approved narrative</span></div><div class="p-body">', unsafe_allow_html=True)
+    kcc_view_override = st.text_area(
+        "KCC View override (optional)",
+        placeholder="Leave blank to use the neutral rule-based market view. Enter an edited paragraph here when the sales team wants a specific, reviewed message.",
+        height=120,
+        key="customer_brief_kcc_view",
+    )
+    st.caption("문구를 비워두면 공개 지표의 방향만 이용한 중립적 템플릿 문장이 들어갑니다. 생성된 문서는 가격 제안이나 수요 예측으로 표현되지 않습니다.")
+    review_confirmed = st.checkbox(
+        "I reviewed the data dates, public-source figures, policy note and customer-facing wording.",
+        value=False,
+        key="customer_brief_review_confirmed",
+    )
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    customer_brief_context = {
+        "usd_krw": usd_krw,
+        "d_fx": d_fx,
+        "housing": v_housing,
+        "d_housing": d_housing,
+        "permits": v_permits,
+        "d_permits": d_permits,
+        "complete": v_complete,
+        "d_complete": d_complete,
+        "existing": v_existing,
+        "d_existing": d_existing,
+        "newsales": v_newsales,
+        "d_newsales": d_newsales,
+        "mortgage": v_mortgage,
+        "d_mortgage": d_mortgage,
+        "cpi": v_cpi,
+        "d_cpi": d_cpi,
+        "fedfunds": v_fedfunds,
+        "scfi": v_scfi,
+        "d_scfi": d_scfi,
+        "ccfi": v_ccfi,
+        "d_ccfi": d_ccfi,
+        "wti": v_wti,
+        "d_wti": d_wti,
+        "brent": v_brent,
+        "d_brent": d_brent,
+        "fx_df": df_fx,
+        "freight_df": df_freight,
+        "housing_df": df_housing[["date", "주택착공"]].rename(columns={"주택착공": "value"}),
+        "permits_df": df_permits[["date", "건축허가"]].rename(columns={"건축허가": "value"}),
+        "complete_df": df_complete[["date", "주택완공"]].rename(columns={"주택완공": "value"}),
+        "asof": {
+            "fx": last_valid_date(df_fx, "USD/KRW"),
+            "freight": last_valid_date(df_freight, "SCFI"),
+            "housing": latest_asof(
+                last_valid_date(df_housing, "주택착공"),
+                last_valid_date(df_permits, "건축허가"),
+                last_valid_date(df_complete, "주택완공"),
+            ),
+            "mortgage": last_valid_date(df_mortgage, "모기지금리"),
+            "energy": latest_asof(last_valid_date(df_wti, "WTI"), last_valid_date(df_brent, "Brent")),
+        },
+    }
+    customer_brief_config = {
+        "issue": brief_issue or "01",
+        "report_month": brief_month,
+        "region": brief_region,
+        "prepared_by": brief_prepared_by,
+        "contact": brief_contact,
+        "include_policy": include_policy,
+        "policy_note": policy_note,
+        "kcc_view": kcc_view_override,
+        "data_asof": latest_asof(
+            last_valid_date(df_fx, "USD/KRW"),
+            last_valid_date(df_freight, "SCFI"),
+            last_valid_date(df_housing, "주택착공"),
+            last_valid_date(df_wti, "WTI"),
+        ),
+    }
+
+    generate_col, status_col = st.columns([1, 1], gap="medium")
+    with generate_col:
+        if st.button("Generate reviewed customer brief", use_container_width=True, type="primary", disabled=not review_confirmed):
+            if include_policy and not policy_note.strip():
+                st.error("Policy Watch를 포함하려면 검토된 문구와 확인 기준일을 입력해야 합니다.")
+            else:
+                with st.spinner("공개 지표와 출처 기준일을 반영해 영문 브리프를 편집하고 있습니다..."):
+                    generated = create_customer_market_signal_pdf(
+                        customer_brief_context,
+                        customer_brief_config,
+                        logo_path=os.path.join(APP_DIR, "kcc_glass_ci_full_color.png"),
+                    )
+                    st.session_state.customer_brief_pdf = generated.getvalue()
+                    st.session_state.customer_brief_file = (
+                        f"KCC_LVT_Market_Signal_Issue{str(brief_issue or '01').zfill(2)}_"
+                        f"{pd.Timestamp(brief_month).strftime('%Y%m')}.pdf"
+                    )
+                st.success("거래선용 Market Signal 생성이 완료되었습니다. 아래 파일을 열어 최종 페이지와 문구를 확인하세요.")
+    with status_col:
+        if not review_confirmed:
+            st.info("검토 확인란을 체크하면 생성 버튼이 활성화됩니다.")
+        elif "customer_brief_pdf" in st.session_state:
+            st.download_button(
+                "Download KCC LVT Market Signal PDF",
+                data=st.session_state.customer_brief_pdf,
+                file_name=st.session_state.get("customer_brief_file", "KCC_LVT_Market_Signal.pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # 🗺 ACCOUNT MAP

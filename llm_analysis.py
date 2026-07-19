@@ -70,6 +70,7 @@ def fetch_fcw_news(category="All Latest", limit=12):
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
         )
     }
+    fetched_at = datetime.now().astimezone().isoformat(timespec="seconds")
     try:
         resp = requests.get(url, headers=headers, timeout=12)
         resp.raise_for_status()
@@ -138,6 +139,8 @@ def fetch_fcw_news(category="All Latest", limit=12):
             "image": pick_image(container),
             "category": category,
             "source": "Floor Covering Weekly",
+            "_fetched_at": fetched_at,
+            "_source_url": url,
         })
         seen.add(link)
         if len(items) >= limit:
@@ -156,6 +159,7 @@ def fetch_fcnews_news(category="Home", limit=12):
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
         )
     }
+    fetched_at = datetime.now().astimezone().isoformat(timespec="seconds")
     try:
         resp = requests.get(url, headers=headers, timeout=12)
         resp.raise_for_status()
@@ -217,6 +221,8 @@ def fetch_fcnews_news(category="Home", limit=12):
             "image": pick_image(container),
             "category": category,
             "source": "Floor Covering News",
+            "_fetched_at": fetched_at,
+            "_source_url": url,
         })
         seen.add(link)
         if len(items) >= limit:

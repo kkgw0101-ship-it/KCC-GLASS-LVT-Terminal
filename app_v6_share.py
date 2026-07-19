@@ -32,6 +32,7 @@ except ImportError:
 
 import llm_analysis as llm
 from customer_brief import create_customer_market_signal_pdf
+from design_brief import create_customer_design_signal_pdf
 
 st.set_page_config(
     page_title="KCC Glass | LVT Terminal",
@@ -1699,40 +1700,102 @@ DESIGN_TAXONOMY = {
     },
 }
 
-def collect_design_articles(limit=18, source_mode="FCW + FCNews"):
+def _design_article_date(value):
+    try:
+        parsed = pd.to_datetime(value, errors="coerce")
+        return None if pd.isna(parsed) else parsed
+    except Exception:
+        return None
+
+
+def collect_design_scan(limit=18, source_mode="FCW + FCNews"):
     fcw_categories = ["Style & Design", "Products", "Features", "Sustainability"]
     fcnews_categories = ["Resilient", "Wood", "Tile", "Carpet", "Technology", "Laminate"]
     rows = []
     seen = set()
+    attempted = {"FCW": 0, "FCNews": 0}
+    successful = {"FCW": 0, "FCNews": 0}
+    source_errors = []
+    fetched_times = []
+
+    def add_items(raw_items, source, category):
+        attempted[source] += 1
+        valid_in_category = 0
+        for raw_item in raw_items:
+            item = dict(raw_item)
+            link = item.get("link", "")
+            title = item.get("title", "")
+            is_article = (
+                source == "FCW" and "/main/" in link
+            ) or (
+                source == "FCNews" and bool(re.search(r"/\d{4}/\d{2}/\d{2}/", link))
+            )
+            if not link or link in seen or not title or not is_article:
+                continue
+            item["design_source_category"] = category
+            item["source_group"] = source
+            rows.append(item)
+            seen.add(link)
+            valid_in_category += 1
+            fetched_at = item.get("_fetched_at")
+            if fetched_at:
+                fetched_times.append(fetched_at)
+        if valid_in_category:
+            successful[source] += 1
+        else:
+            source_errors.append(f"{source} · {category}")
+
     if source_mode in ["FCW + FCNews", "FCW only"]:
         for cat in fcw_categories:
-            for item in llm.fetch_fcw_news(cat, limit=8):
-                link = item.get("link", "")
-                title = item.get("title", "")
-                if not link or link in seen or not title:
-                    continue
-                item = dict(item)
-                item["design_source_category"] = cat
-                item["source_group"] = "FCW"
-                rows.append(item)
-                seen.add(link)
-                if len(rows) >= limit and source_mode == "FCW only":
-                    return rows
+            add_items(llm.fetch_fcw_news(cat, limit=8), "FCW", cat)
+            if len(rows) >= limit and source_mode == "FCW only":
+                break
     if source_mode in ["FCW + FCNews", "FCNews only"]:
         for cat in fcnews_categories:
-            for item in llm.fetch_fcnews_news(cat, limit=8):
-                link = item.get("link", "")
-                title = item.get("title", "")
-                if not link or link in seen or not title:
-                    continue
-                item = dict(item)
-                item["design_source_category"] = cat
-                item["source_group"] = "FCNews"
-                rows.append(item)
-                seen.add(link)
-                if len(rows) >= limit and source_mode == "FCNews only":
-                    return rows
-    return rows[:limit]
+            add_items(llm.fetch_fcnews_news(cat, limit=8), "FCNews", cat)
+            if len(rows) >= limit and source_mode == "FCNews only":
+                break
+
+    def article_sort_key(item):
+        parsed = _design_article_date(item.get("published"))
+        return parsed if parsed is not None else pd.Timestamp("1900-01-01")
+
+    rows = sorted(rows, key=article_sort_key, reverse=True)
+    if source_mode == "FCW + FCNews":
+        per_source = max(limit // 2, 1)
+        fcw_rows = [item for item in rows if item.get("source_group") == "FCW"]
+        fcnews_rows = [item for item in rows if item.get("source_group") == "FCNews"]
+        selected = fcw_rows[:per_source] + fcnews_rows[:per_source]
+        selected_links = {item.get("link") for item in selected}
+        remaining = [item for item in rows if item.get("link") not in selected_links]
+        rows = sorted(selected + remaining[: max(limit - len(selected), 0)], key=article_sort_key, reverse=True)[:limit]
+    else:
+        rows = rows[:limit]
+    published_dates = [
+        parsed for parsed in (_design_article_date(item.get("published")) for item in rows)
+        if parsed is not None
+    ]
+    source_counts = {
+        source: sum(item.get("source_group") == source for item in rows)
+        for source in ["FCW", "FCNews"]
+    }
+    fetched_at = max(fetched_times) if fetched_times else datetime.now().astimezone().isoformat(timespec="seconds")
+    meta = {
+        "sample_limit": limit,
+        "sample_count": len(rows),
+        "source_counts": source_counts,
+        "attempted_categories": attempted,
+        "successful_categories": successful,
+        "source_errors": source_errors,
+        "fetched_at": fetched_at,
+        "published_start": min(published_dates).strftime("%Y-%m-%d") if published_dates else "N/A",
+        "published_end": max(published_dates).strftime("%Y-%m-%d") if published_dates else "N/A",
+    }
+    return {"items": rows, "meta": meta}
+
+
+def collect_design_articles(limit=18, source_mode="FCW + FCNews"):
+    return collect_design_scan(limit=limit, source_mode=source_mode)["items"]
 
 def build_source_keyword_comparison(items):
     rows = []
@@ -1767,13 +1830,7 @@ def extract_design_keywords(items):
         if count:
             rows.append({"Keyword": key, "Mentions": count})
     if not rows:
-        rows = [
-            {"Keyword": "warm wood", "Mentions": 1},
-            {"Keyword": "wide plank", "Mentions": 1},
-            {"Keyword": "matte finish", "Mentions": 1},
-            {"Keyword": "commercial neutral", "Mentions": 1},
-            {"Keyword": "performance", "Mentions": 1},
-        ]
+        return pd.DataFrame(columns=["Keyword", "Mentions"])
     return pd.DataFrame(rows).sort_values("Mentions", ascending=False).reset_index(drop=True)
 
 def build_design_taxonomy(items):
@@ -2512,7 +2569,7 @@ MENU_GROUPS = {
     "📊 Overview": ["📊 Overview"],
     "💼 Sales Intelligence": ["🎯 Market Insight", "📄 Customer Brief", "🗺 Account Map", "🏭 Competitor Export", "💱 FX/Tariff"],
     "🚢 Cost & Logistics": ["🛢 원자재", "🚢 Freight"],
-    "🎨 Design & News": ["🎨 Design Intelligence", "🧱 Design Library", "📰 FCW News"],
+    "🎨 Design & News": ["🎨 Design Intelligence", "📐 Design Brief", "🧱 Design Library", "📰 FCW News"],
     "🏡 Macro / Housing": ["🏡 Housing", "📈 Macro"],
 }
 PAGE_TO_GROUP = {
@@ -4873,38 +4930,249 @@ elif menu == "🏭 Competitor Export":
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
+# CUSTOMER DESIGN BRIEF BUILDER
+# ════════════════════════════════════════════════════════════
+elif menu == "📐 Design Brief":
+    st.markdown('<div class="sec"><span class="sec-t">Customer Design Brief Builder</span><span class="sec-s">거래선 배포용 KCC LVT Design Signal · Public trade coverage</span><span class="live"><span class="dot"></span>Review gated</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="panel"><div class="p-head"><span class="p-t">External Design Enablement</span><span class="p-m">KCC Glass Design Intelligence Series</span></div>'
+        '<div class="p-guide"><b>활용 방식</b> FCW·FCNews의 최근 공개 기사 흐름과 KCC 공식 Design Library를 4페이지 영문 디자인 브리프로 변환합니다. 자동 생성 후 담당자가 출처와 문구를 검토한 경우에만 다운로드할 수 있습니다.</div>'
+        '<div class="p-body">',
+        unsafe_allow_html=True,
+    )
+
+    safe_col, excluded_col = st.columns(2, gap="medium")
+    with safe_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Automatically Included</div>'
+            '<div class="summary-v">Public keyword signals · Material/Color/Pattern buckets · Article titles and source links · Official KCC Design Library<br>'
+            '<span style="color:#7E8A9F;font-size:11px">수집 시각, 표본 수, 기사 날짜 범위를 함께 표시합니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+    with excluded_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Always Excluded</div>'
+            '<div class="summary-v">Third-party full article text/images · Internal design pipeline · Customer-specific pricing · Unverified trend forecast<br>'
+            '<span style="color:#7E8A9F;font-size:11px">외부 기사 이미지는 PDF에 재배포하지 않습니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+
+    design_report_scan = collect_design_scan(limit=24, source_mode="FCW + FCNews")
+    design_report_items = design_report_scan["items"]
+    design_report_meta = design_report_scan["meta"]
+    design_report_keywords = extract_design_keywords(design_report_items)
+    design_report_taxonomy = build_design_taxonomy(design_report_items)
+    design_report_implications = build_product_implications(design_report_keywords)
+    design_report_sources = build_source_keyword_comparison(design_report_items)
+
+    try:
+        design_report_scan_time = pd.Timestamp(design_report_meta["fetched_at"]).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        design_report_scan_time = str(design_report_meta.get("fetched_at", "N/A"))
+    st.markdown(
+        f'<div class="data-asof">'
+        f'{asof_chip("Scan", design_report_scan_time)}'
+        f'{asof_chip("Article range", f"{design_report_meta.get("published_start", "N/A")} → {design_report_meta.get("published_end", "N/A")}")}'
+        f'{asof_chip("FCW", design_report_meta.get("source_counts", {}).get("FCW", 0))}'
+        f'{asof_chip("FCNews", design_report_meta.get("source_counts", {}).get("FCNews", 0))}'
+        f'{asof_chip("Sample", f"{len(design_report_items)} / {design_report_meta.get("sample_limit", 24)}")}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    refresh_col, freshness_col = st.columns([1, 2], gap="medium")
+    with refresh_col:
+        if st.button("보고서용 최신 기사 다시 스캔", use_container_width=True, key="refresh_design_brief_scan"):
+            llm.fetch_fcw_news.clear()
+            llm.fetch_fcnews_news.clear()
+            st.rerun()
+    with freshness_col:
+        if not design_report_items:
+            st.error("보고서에 사용할 디자인 기사를 불러오지 못했습니다.")
+        elif design_report_meta.get("source_errors"):
+            st.caption(f"유효 기사 {len(design_report_items)}건을 사용합니다. 기사 링크가 확인되지 않은 카테고리 {len(design_report_meta['source_errors'])}개는 제외했습니다.")
+        else:
+            st.caption("모든 보고서 수치는 현재 표시된 공개 기사 표본에서 계산됩니다.")
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    f1, f2, f3 = st.columns([0.7, 1.15, 1.15], gap="medium")
+    with f1:
+        design_brief_issue = st.text_input("Issue number", value="01", max_chars=3, key="design_brief_issue")
+        design_brief_date = st.date_input("Report date", value=datetime.now().date(), key="design_brief_date")
+    with f2:
+        design_brief_region = st.selectbox("Market / audience", ["North America", "United States", "Canada"], key="design_brief_region")
+        design_brief_prepared_by = st.text_input("Prepared by", value="KCC Glass PL/LVT Export Sales Team", key="design_brief_prepared_by")
+    with f3:
+        design_brief_contact = st.text_input("Contact shown in disclaimer (optional)", placeholder="Kent Kim · kent.kim@company.com", key="design_brief_contact")
+        st.text_input("Official reference", value=HOMECC_LVT_DESIGN_LIBRARY_URL, disabled=True, key="design_brief_library_url")
+
+    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Editorial Review</span><span class="p-m">Human-approved design narrative</span></div><div class="p-body">', unsafe_allow_html=True)
+    design_kcc_view = st.text_area(
+        "KCC Design View override (optional, English)",
+        placeholder="Leave blank to use a neutral rule-based design view. Enter an approved English paragraph here when the sales or design team wants a specific customer message.",
+        height=120,
+        key="design_brief_kcc_view",
+    )
+    st.caption("문구를 비워두면 공개 기사 표본의 방향만 이용한 중립적 영문 문장이 들어갑니다. 보고서는 수요 예측이나 제품 공급 확약으로 표현되지 않습니다.")
+    design_review_confirmed = st.checkbox(
+        "I reviewed the source dates, sampled articles, design wording and customer-facing implications.",
+        value=False,
+        key="design_brief_review_confirmed",
+    )
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    design_brief_context = {
+        "items": design_report_items,
+        "keywords": design_report_keywords.to_dict("records"),
+        "taxonomy": design_report_taxonomy.to_dict("records"),
+        "implications": design_report_implications.to_dict("records"),
+        "source_keywords": design_report_sources.to_dict("records"),
+        "meta": design_report_meta,
+    }
+    design_brief_config = {
+        "issue": design_brief_issue or "01",
+        "report_date": design_brief_date,
+        "region": design_brief_region,
+        "prepared_by": design_brief_prepared_by,
+        "contact": design_brief_contact,
+        "kcc_view": design_kcc_view,
+        "data_asof": design_report_meta.get("published_end", "N/A"),
+        "design_library_url": HOMECC_LVT_DESIGN_LIBRARY_URL,
+    }
+
+    generate_col, status_col = st.columns([1, 1], gap="medium")
+    with generate_col:
+        if st.button(
+            "Generate reviewed design brief",
+            use_container_width=True,
+            type="primary",
+            disabled=not design_review_confirmed or not design_report_items,
+            key="generate_design_brief",
+        ):
+            if design_kcc_view and any(ord(char) > 127 for char in design_kcc_view):
+                st.error("외부 영문 PDF의 KCC Design View는 영문으로 입력해 주세요.")
+            else:
+                with st.spinner("공개 디자인 신호와 공식 KCC 레퍼런스를 4페이지 영문 브리프로 편집하고 있습니다..."):
+                    design_brief_logo = next(
+                        (
+                            os.path.join(APP_DIR, filename)
+                            for filename in ("kcc_glass_ci_full_color.png", "logo_navy_t.png")
+                            if os.path.isfile(os.path.join(APP_DIR, filename))
+                        ),
+                        None,
+                    )
+                    design_brief_hero = os.path.join(APP_DIR, "homecc_lvt_design_library_hero.png")
+                    generated = create_customer_design_signal_pdf(
+                        design_brief_context,
+                        design_brief_config,
+                        logo_path=design_brief_logo,
+                        hero_path=design_brief_hero if os.path.isfile(design_brief_hero) else None,
+                    )
+                    st.session_state.design_brief_pdf = generated.getvalue()
+                    st.session_state.design_brief_file = (
+                        f"KCC_LVT_Design_Signal_Issue{str(design_brief_issue or '01').zfill(2)}_"
+                        f"{pd.Timestamp(design_brief_date).strftime('%Y%m%d')}.pdf"
+                    )
+                st.success("거래선용 Design Signal 생성이 완료되었습니다. 아래 파일을 열어 페이지와 영문 문구를 최종 확인하세요.")
+    with status_col:
+        if not design_review_confirmed:
+            st.info("검토 확인란을 체크하면 생성 버튼이 활성화됩니다.")
+        elif "design_brief_pdf" in st.session_state:
+            st.download_button(
+                "Download KCC LVT Design Signal PDF",
+                data=st.session_state.design_brief_pdf,
+                file_name=st.session_state.get("design_brief_file", "KCC_LVT_Design_Signal.pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_design_brief",
+            )
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
 # 🎨 DESIGN INTELLIGENCE
 # ════════════════════════════════════════════════════════════
 elif menu == "🎨 Design Intelligence":
     st.markdown('<div class="sec"><span class="sec-t">Design Intelligence</span><span class="sec-s">미국 바닥재 디자인 트렌드 · 제품 레퍼런스</span><span class="live"><span class="dot"></span>FCW + FCNews</span></div>', unsafe_allow_html=True)
 
-    design_source_mode = st.radio(
-        "Design Source",
-        ["FCW + FCNews", "FCW only", "FCNews only"],
-        horizontal=True,
-        label_visibility="collapsed",
-        key="design_source_mode",
-    )
-    design_items = collect_design_articles(limit=24, source_mode=design_source_mode)
+    source_control, refresh_control = st.columns([4, 1], gap="medium")
+    with source_control:
+        design_source_mode = st.radio(
+            "Design Source",
+            ["FCW + FCNews", "FCW only", "FCNews only"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="design_source_mode",
+        )
+    with refresh_control:
+        refresh_design_scan = st.button(
+            "최신 기사 다시 스캔",
+            use_container_width=True,
+            key="refresh_design_intelligence_scan",
+        )
+    if refresh_design_scan:
+        st.session_state.design_previous_keyword_snapshot = st.session_state.get(
+            "design_current_keyword_snapshot", {}
+        )
+        llm.fetch_fcw_news.clear()
+        llm.fetch_fcnews_news.clear()
+
+    design_scan = collect_design_scan(limit=24, source_mode=design_source_mode)
+    design_items = design_scan["items"]
+    design_meta = design_scan["meta"]
     keyword_df = extract_design_keywords(design_items)
     taxonomy_df = build_design_taxonomy(design_items)
     implication_df = build_product_implications(keyword_df)
     source_keyword_df = build_source_keyword_comparison(design_items)
     guide_df = collect_fcnews_guides()
 
+    current_keyword_snapshot = {
+        str(row["Keyword"]): int(row["Mentions"])
+        for _, row in keyword_df.iterrows()
+    }
+    previous_keyword_snapshot = st.session_state.get("design_previous_keyword_snapshot", {})
+    changed_keyword_count = sum(
+        current_keyword_snapshot.get(key, 0) != previous_keyword_snapshot.get(key, 0)
+        for key in set(current_keyword_snapshot) | set(previous_keyword_snapshot)
+    ) if previous_keyword_snapshot else None
+    st.session_state.design_current_keyword_snapshot = current_keyword_snapshot
+
+    try:
+        scan_time_label = pd.Timestamp(design_meta["fetched_at"]).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        scan_time_label = str(design_meta.get("fetched_at", "N/A"))
+    st.markdown(
+        f'<div class="data-asof">'
+        f'{asof_chip("Last successful scan", scan_time_label)}'
+        f'{asof_chip("Article range", f"{design_meta.get("published_start", "N/A")} → {design_meta.get("published_end", "N/A")}")}'
+        f'{asof_chip("FCW", f"{design_meta.get("source_counts", {}).get("FCW", 0)} sampled")}'
+        f'{asof_chip("FCNews", f"{design_meta.get("source_counts", {}).get("FCNews", 0)} sampled")}'
+        f'{asof_chip("Sample cap", f"{design_meta.get("sample_count", 0)} / {design_meta.get("sample_limit", 24)}")}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    if refresh_design_scan:
+        st.success("최신 기사 스캔을 완료했습니다. 화면 수치는 새로 불러온 표본으로 다시 계산되었습니다.")
+    if design_meta.get("source_errors") and design_items:
+        st.caption(f"일부 카테고리 페이지에서 기사 링크를 찾지 못했습니다: {len(design_meta['source_errors'])}개. 확인된 기사만 집계했습니다.")
+    if not design_items:
+        st.error("FCW/FCNews에서 유효한 디자인 기사를 불러오지 못했습니다. 잠시 후 다시 스캔해 주세요.")
+    elif changed_keyword_count is not None:
+        st.caption(f"직전 수동 스캔 대비 {changed_keyword_count}개 분류 키워드의 언급 수가 변경되었습니다.")
+
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("Design Articles", f"{len(design_items):,.0f}")
+        st.metric("Sampled Articles", f"{len(design_items):,.0f}")
     with k2:
         st.metric("Top Keyword", keyword_df.iloc[0]["Keyword"] if len(keyword_df) else "N/A")
     with k3:
         material_top = taxonomy_df[taxonomy_df["Axis"] == "Material"].sort_values("Signal", ascending=False).iloc[0]
-        st.metric("Material Signal", material_top["Trend Bucket"])
+        st.metric("Material Signal", material_top["Trend Bucket"] if design_items and material_top["Signal"] > 0 else "N/A")
     with k4:
         pattern_top = taxonomy_df[taxonomy_df["Axis"] == "Pattern"].sort_values("Signal", ascending=False).iloc[0]
-        st.metric("Pattern Signal", pattern_top["Trend Bucket"])
+        st.metric("Pattern Signal", pattern_top["Trend Bucket"] if design_items and pattern_top["Signal"] > 0 else "N/A")
 
-    st.markdown('<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">FCW + FCNews scan</span></div><div class="p-body">', unsafe_allow_html=True)
+    st.markdown(f'<div class="panel"><div class="p-head"><span class="p-t">Trend Keyword Radar</span><span class="p-m">{html.escape(design_source_mode)} · rule-based scan</span></div><div class="p-body">', unsafe_allow_html=True)
     st.markdown(render_trend_pills(keyword_df), unsafe_allow_html=True)
     kw_col, tax_col = st.columns([1, 1], gap="medium")
     with kw_col:
@@ -5021,9 +5289,22 @@ elif menu == "🎨 Design Intelligence":
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     export_design = pd.DataFrame(design_items)
+    export_scan_meta = pd.DataFrame([
+        {
+            "Last successful scan": scan_time_label,
+            "Published start": design_meta.get("published_start", "N/A"),
+            "Published end": design_meta.get("published_end", "N/A"),
+            "FCW sampled": design_meta.get("source_counts", {}).get("FCW", 0),
+            "FCNews sampled": design_meta.get("source_counts", {}).get("FCNews", 0),
+            "Sample count": design_meta.get("sample_count", 0),
+            "Sample cap": design_meta.get("sample_limit", 24),
+            "Source mode": design_source_mode,
+        }
+    ])
     excel_download_button(
         "📊 Design Intelligence 엑셀 다운로드",
         {
+            "Scan Metadata": export_scan_meta,
             "Design Articles": export_design,
             "Keyword Radar": keyword_df,
             "Source Keyword Compare": source_keyword_df,

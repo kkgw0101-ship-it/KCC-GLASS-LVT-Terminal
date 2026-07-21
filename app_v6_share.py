@@ -33,6 +33,7 @@ except ImportError:
 import llm_analysis as llm
 from customer_brief import create_customer_market_signal_pdf
 from design_brief import create_customer_design_signal_pdf
+from integrated_brief import create_customer_integrated_signal_pdf
 
 st.set_page_config(
     page_title="KCC Glass | LVT Terminal",
@@ -2569,7 +2570,7 @@ MENU_GROUPS = {
     "📊 Overview": ["📊 Overview"],
     "💼 Sales Intelligence": ["🎯 Market Insight", "📄 Customer Brief", "🗺 Account Map", "🏭 Competitor Export", "💱 FX/Tariff"],
     "🚢 Cost & Logistics": ["🛢 원자재", "🚢 Freight"],
-    "🎨 Design & News": ["🎨 Design Intelligence", "📐 Design Brief", "🧱 Design Library", "📰 FCW News"],
+    "🎨 Design & News": ["🎨 Design Intelligence", "🧱 Design Library", "📰 FCW News"],
     "🏡 Macro / Housing": ["🏡 Housing", "📈 Macro"],
 }
 PAGE_TO_GROUP = {
@@ -2724,6 +2725,26 @@ st.markdown(f"""
   {asof_chip("Loaded", datetime.now().strftime("%Y-%m-%d %H:%M"))}
 </div>
 """, unsafe_allow_html=True)
+
+# Customer-facing reports share one hub so the sidebar stays focused.
+if menu == "📄 Customer Brief":
+    st.markdown(
+        '<div class="sec"><span class="sec-t">Customer Brief Studio</span>'
+        '<span class="sec-s">거래선 배포용 영문 리서치 브리프 · Public-data only</span>'
+        '<span class="live"><span class="dot"></span>Review gated</span></div>',
+        unsafe_allow_html=True,
+    )
+    customer_brief_mode = st.radio(
+        "Report type",
+        ["Market Signal", "Design Signal", "Integrated Market & Design"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="customer_brief_mode",
+    )
+    if customer_brief_mode == "Design Signal":
+        menu = "📐 Design Brief"
+    elif customer_brief_mode == "Integrated Market & Design":
+        menu = "🧭 Integrated Brief"
 
 # ════════════════════════════════════════════════════════════
 # 🏠 HOME
@@ -4054,7 +4075,6 @@ elif menu == "🎯 Market Insight":
 # CUSTOMER BRIEF BUILDER
 # ════════════════════════════════════════════════════════════
 elif menu == "📄 Customer Brief":
-    st.markdown('<div class="sec"><span class="sec-t">Customer Brief Builder</span><span class="sec-s">거래선 배포용 KCC LVT Market Signal · Public-data only</span><span class="live"><span class="dot"></span>Review gated</span></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="panel"><div class="p-head"><span class="p-t">External Sales Enablement</span><span class="p-m">KCC Glass Market Intelligence Series</span></div>'
         '<div class="p-guide"><b>활용 방식</b> 플랫폼의 공개 지표를 4페이지 영문 리서치 브리프로 변환합니다. 자동 생성 후 담당자가 출처와 문구를 검토한 경우에만 다운로드할 수 있습니다.</div>'
@@ -4933,7 +4953,6 @@ elif menu == "🏭 Competitor Export":
 # CUSTOMER DESIGN BRIEF BUILDER
 # ════════════════════════════════════════════════════════════
 elif menu == "📐 Design Brief":
-    st.markdown('<div class="sec"><span class="sec-t">Customer Design Brief Builder</span><span class="sec-s">거래선 배포용 KCC LVT Design Signal · Public trade coverage</span><span class="live"><span class="dot"></span>Review gated</span></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="panel"><div class="p-head"><span class="p-t">External Design Enablement</span><span class="p-m">KCC Glass Design Intelligence Series</span></div>'
         '<div class="p-guide"><b>활용 방식</b> FCW·FCNews의 최근 공개 기사 흐름과 KCC 공식 Design Library를 4페이지 영문 디자인 브리프로 변환합니다. 자동 생성 후 담당자가 출처와 문구를 검토한 경우에만 다운로드할 수 있습니다.</div>'
@@ -5085,6 +5104,201 @@ elif menu == "📐 Design Brief":
                 mime="application/pdf",
                 use_container_width=True,
                 key="download_design_brief",
+            )
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# INTEGRATED CUSTOMER BRIEF BUILDER
+# ════════════════════════════════════════════════════════════
+elif menu == "🧭 Integrated Brief":
+    st.markdown(
+        '<div class="panel"><div class="p-head"><span class="p-t">Integrated Customer Enablement</span>'
+        '<span class="p-m">KCC Glass Market & Design Intelligence Series</span></div>'
+        '<div class="p-guide"><b>활용 방식</b> 공개 시장 지표와 최근 디자인 기사 신호를 하나의 5페이지 영문 브리프로 연결합니다. '
+        '단순 합본이 아니라 거래선의 소싱·재고·디자인 협의를 한 흐름으로 구성하며, 담당자 검토 후에만 다운로드할 수 있습니다.</div>'
+        '<div class="p-body">',
+        unsafe_allow_html=True,
+    )
+
+    included_col, excluded_col = st.columns(2, gap="medium")
+    with included_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Customer-safe Content</div>'
+            '<div class="summary-v">USD/KRW · SCFI/CCFI · U.S. Housing · Mortgage/Macro · Public design signals · Official KCC Design Library<br>'
+            '<span style="color:#7E8A9F;font-size:11px">시장 환경에서 제품·디자인 대화로 자연스럽게 이어집니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+    with excluded_col:
+        st.markdown(
+            '<div class="summary-card"><div class="summary-k">Never Included</div>'
+            '<div class="summary-v">PVC/DOTP 구매지수 · 경쟁사 수출 추정 · 거래선/리드 · 원가·마진 · 제3자 기사 이미지/전문<br>'
+            '<span style="color:#7E8A9F;font-size:11px">외부 배포에 부적합한 내부·저작권 자료는 자동 제외합니다.</span></div></div>',
+            unsafe_allow_html=True,
+        )
+
+    integrated_scan = collect_design_scan(limit=24, source_mode="FCW + FCNews")
+    integrated_items = integrated_scan["items"]
+    integrated_meta = integrated_scan["meta"]
+    integrated_keywords = extract_design_keywords(integrated_items)
+    integrated_taxonomy = build_design_taxonomy(integrated_items)
+    integrated_implications = build_product_implications(integrated_keywords)
+    integrated_sources = build_source_keyword_comparison(integrated_items)
+    try:
+        integrated_scan_time = pd.Timestamp(integrated_meta["fetched_at"]).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        integrated_scan_time = str(integrated_meta.get("fetched_at", "N/A"))
+
+    st.markdown(
+        f'<div class="data-asof">'
+        f'{asof_chip("Market", latest_asof(last_valid_date(df_fx, "USD/KRW"), last_valid_date(df_freight, "SCFI"), last_valid_date(df_housing, "주택착공")))}'
+        f'{asof_chip("Design scan", integrated_scan_time)}'
+        f'{asof_chip("Article range", f"{integrated_meta.get("published_start", "N/A")} → {integrated_meta.get("published_end", "N/A")}")}'
+        f'{asof_chip("FCW", integrated_meta.get("source_counts", {}).get("FCW", 0))}'
+        f'{asof_chip("FCNews", integrated_meta.get("source_counts", {}).get("FCNews", 0))}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    refresh_col, note_col = st.columns([1, 2], gap="medium")
+    with refresh_col:
+        if st.button("통합 보고서용 기사 다시 스캔", use_container_width=True, key="refresh_integrated_brief_scan"):
+            llm.fetch_fcw_news.clear()
+            llm.fetch_fcnews_news.clear()
+            st.rerun()
+    with note_col:
+        if not integrated_items:
+            st.error("통합 보고서에 사용할 디자인 기사를 불러오지 못했습니다.")
+        else:
+            st.caption(f"공개 디자인 기사 {len(integrated_items)}건과 현재 플랫폼의 공개 시장 지표만 사용합니다.")
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    f1, f2, f3 = st.columns([0.7, 1.15, 1.15], gap="medium")
+    with f1:
+        integrated_issue = st.text_input("Issue number", value="01", max_chars=3, key="integrated_brief_issue")
+        integrated_date = st.date_input("Report date", value=datetime.now().date(), key="integrated_brief_date")
+    with f2:
+        integrated_region = st.selectbox("Market / audience", ["North America", "United States", "Canada"], key="integrated_brief_region")
+        integrated_prepared_by = st.text_input("Prepared by", value="KCC Glass PL/LVT Export Sales Team", key="integrated_brief_prepared_by")
+    with f3:
+        integrated_contact = st.text_input("Contact shown in disclaimer (optional)", placeholder="Kent Kim · kent.kim@company.com", key="integrated_brief_contact")
+        st.text_input("Official design reference", value=HOMECC_LVT_DESIGN_LIBRARY_URL, disabled=True, key="integrated_brief_library_url")
+
+    st.markdown(
+        '<div class="panel"><div class="p-head"><span class="p-t">Editorial Review</span>'
+        '<span class="p-m">Human-approved integrated narrative</span></div><div class="p-body">',
+        unsafe_allow_html=True,
+    )
+    market_override = st.text_area(
+        "KCC Market View override (optional, English)",
+        placeholder="Leave blank to use a neutral rule-based market view.",
+        height=95,
+        key="integrated_market_view",
+    )
+    design_override = st.text_area(
+        "KCC Design View override (optional, English)",
+        placeholder="Leave blank to use a neutral rule-based design view.",
+        height=95,
+        key="integrated_design_view",
+    )
+    st.caption("두 문구를 비워두면 공개 지표와 기사 표본의 방향만 사용한 중립적 영문 문장이 들어갑니다. 가격·수요·공급 확약으로 표현되지 않습니다.")
+    integrated_reviewed = st.checkbox(
+        "I reviewed the market dates, sampled design articles, source links and customer-facing wording.",
+        value=False,
+        key="integrated_brief_reviewed",
+    )
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    integrated_market_context = {
+        "usd_krw": usd_krw, "d_fx": d_fx,
+        "housing": v_housing, "d_housing": d_housing,
+        "permits": v_permits, "d_permits": d_permits,
+        "complete": v_complete, "d_complete": d_complete,
+        "existing": v_existing, "d_existing": d_existing,
+        "newsales": v_newsales, "d_newsales": d_newsales,
+        "mortgage": v_mortgage, "d_mortgage": d_mortgage,
+        "cpi": v_cpi, "d_cpi": d_cpi, "fedfunds": v_fedfunds,
+        "scfi": v_scfi, "d_scfi": d_scfi, "ccfi": v_ccfi, "d_ccfi": d_ccfi,
+        "wti": v_wti, "d_wti": d_wti, "brent": v_brent, "d_brent": d_brent,
+        "fx_df": df_fx, "freight_df": df_freight,
+        "housing_df": df_housing[["date", "주택착공"]].rename(columns={"주택착공": "value"}),
+        "permits_df": df_permits[["date", "건축허가"]].rename(columns={"건축허가": "value"}),
+        "complete_df": df_complete[["date", "주택완공"]].rename(columns={"주택완공": "value"}),
+        "asof": {
+            "fx": last_valid_date(df_fx, "USD/KRW"),
+            "freight": last_valid_date(df_freight, "SCFI"),
+            "housing": latest_asof(last_valid_date(df_housing, "주택착공"), last_valid_date(df_permits, "건축허가"), last_valid_date(df_complete, "주택완공")),
+            "mortgage": last_valid_date(df_mortgage, "모기지금리"),
+            "energy": latest_asof(last_valid_date(df_wti, "WTI"), last_valid_date(df_brent, "Brent")),
+        },
+    }
+    integrated_design_context = {
+        "items": integrated_items,
+        "keywords": integrated_keywords.to_dict("records"),
+        "taxonomy": integrated_taxonomy.to_dict("records"),
+        "implications": integrated_implications.to_dict("records"),
+        "source_keywords": integrated_sources.to_dict("records"),
+        "meta": integrated_meta,
+    }
+    integrated_config = {
+        "issue": integrated_issue or "01",
+        "report_date": integrated_date,
+        "region": integrated_region,
+        "prepared_by": integrated_prepared_by,
+        "contact": integrated_contact,
+        "market_view": market_override,
+        "design_view": design_override,
+        "market_asof": latest_asof(last_valid_date(df_fx, "USD/KRW"), last_valid_date(df_freight, "SCFI"), last_valid_date(df_housing, "주택착공")),
+        "design_asof": integrated_meta.get("published_end", "N/A"),
+        "design_library_url": HOMECC_LVT_DESIGN_LIBRARY_URL,
+    }
+
+    generate_col, status_col = st.columns([1, 1], gap="medium")
+    with generate_col:
+        if st.button(
+            "Generate integrated market & design brief",
+            use_container_width=True,
+            type="primary",
+            disabled=not integrated_reviewed or not integrated_items,
+            key="generate_integrated_brief",
+        ):
+            if any(ord(char) > 127 for char in market_override + design_override):
+                st.error("외부 영문 PDF의 Market/Design View는 영문으로 입력해 주세요.")
+            else:
+                with st.spinner("시장·물류·디자인 신호를 5페이지 거래선용 브리프로 편집하고 있습니다..."):
+                    integrated_logo = next(
+                        (
+                            os.path.join(APP_DIR, filename)
+                            for filename in ("kcc_glass_ci_full_color.png", "logo_navy_t.png")
+                            if os.path.isfile(os.path.join(APP_DIR, filename))
+                        ),
+                        None,
+                    )
+                    integrated_hero = os.path.join(APP_DIR, "homecc_lvt_design_library_hero.png")
+                    generated = create_customer_integrated_signal_pdf(
+                        integrated_market_context,
+                        integrated_design_context,
+                        integrated_config,
+                        logo_path=integrated_logo,
+                        hero_path=integrated_hero if os.path.isfile(integrated_hero) else None,
+                    )
+                    st.session_state.integrated_brief_pdf = generated.getvalue()
+                    st.session_state.integrated_brief_file = (
+                        f"KCC_LVT_Market_Design_Signal_Issue{str(integrated_issue or '01').zfill(2)}_"
+                        f"{pd.Timestamp(integrated_date).strftime('%Y%m%d')}.pdf"
+                    )
+                st.success("통합 Market & Design Signal 생성이 완료되었습니다. 아래 파일을 열어 5페이지와 영문 문구를 최종 확인하세요.")
+    with status_col:
+        if not integrated_reviewed:
+            st.info("검토 확인란을 체크하면 생성 버튼이 활성화됩니다.")
+        elif "integrated_brief_pdf" in st.session_state:
+            st.download_button(
+                "Download Integrated Market & Design PDF",
+                data=st.session_state.integrated_brief_pdf,
+                file_name=st.session_state.get("integrated_brief_file", "KCC_LVT_Market_Design_Signal.pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_integrated_brief",
             )
 
     st.markdown('</div></div>', unsafe_allow_html=True)

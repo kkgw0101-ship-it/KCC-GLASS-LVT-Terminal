@@ -5,9 +5,13 @@ Streamlit Community Cloud 배포용 공유 버전입니다.
 ## 배포 파일
 
 - `app_v6_share.py`
+- `customer_brief.py`
+- `design_brief.py`
+- `integrated_brief.py`
 - `llm_analysis.py`
 - `logo_white_t.png`
 - `logo_navy_t.png`
+- `kcc_glass_ci_full_color.png`
 - `requirements.txt`
 - `freight_index_records.json`
 - `market_insight_records.json`
@@ -39,4 +43,3 @@ app_v6_share.py
 - `.env`
 - `clients.json`
 - 원본 거래선/ImportYeti 엑셀 파일
-

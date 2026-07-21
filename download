@@ -1,0 +1,15 @@
+.env
+clients.json
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.streamlit/secrets.toml
+app_v5.py
+app_v6.py
+files.zip
+kcc_logo.png
+*.pdf
+*.xls
+.python_deps/
+freight_index_260619.xls

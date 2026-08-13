@@ -7,11 +7,12 @@ LVT Intelligence Dashboard — LLM 분석 모듈
 
 import feedparser
 import anthropic
+import json
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import streamlit as st
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import re
 
 # ── 뉴스 RSS 피드 (모두 무료, Google News 기반) ─────────────────
@@ -301,3 +302,276 @@ def generate_market_briefing(api_key, indicators):
         return msg.content[0].text
     except Exception as e:
         return f"⚠️ 브리핑 생성 오류: {str(e)}"
+
+
+# Public article extraction and governed executive synthesis.
+# Article collection uses normal HTTP/HTML parsing; the LLM is applied only
+# after the source body and platform indicator dates have been captured.
+ARTICLE_DOMAINS = {
+    "floorcoveringweekly.com",
+    "www.floorcoveringweekly.com",
+    "fcnews.net",
+    "www.fcnews.net",
+}
+
+MARKET_ARTICLE_KEYWORDS = (
+    "resilient", "lvt", "vinyl", "flooring", "housing", "residential",
+    "remodel", "construction", "demand", "sales", "orders", "inventory",
+    "supply", "domestic", "retail", "builder", "commercial", "mortgage",
+)
+
+
+def _article_headers():
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+
+def _meta_content(soup, *selectors):
+    for selector in selectors:
+        node = soup.select_one(selector)
+        if node:
+            value = node.get("content") or node.get("datetime") or node.get_text(" ", strip=True)
+            if value:
+                return re.sub(r"\s+", " ", value).strip()
+    return ""
+
+
+@st.cache_data(ttl=1800)
+def fetch_article_content(url):
+    """Fetch a public FCW/FCNews article and return its readable body."""
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() not in ARTICLE_DOMAINS:
+        return {"ok": False, "url": str(url or ""), "error": "Only public FCW and FCNews article URLs are supported."}
+
+    try:
+        response = requests.get(url, headers=_article_headers(), timeout=18)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+    except Exception as exc:
+        return {"ok": False, "url": url, "error": f"Article request failed: {exc}"}
+
+    title = _meta_content(soup, 'meta[property="og:title"]', 'meta[name="twitter:title"]', "h1")
+    description = _meta_content(
+        soup,
+        'meta[property="og:description"]',
+        'meta[name="description"]',
+        'meta[name="twitter:description"]',
+    )
+    published = _meta_content(
+        soup,
+        'meta[property="article:published_time"]',
+        'meta[name="date"]',
+        'meta[name="publish-date"]',
+        "time[datetime]",
+        "time",
+    )
+    author = _meta_content(soup, 'meta[name="author"]', '[rel="author"]', ".author", ".byline")
+    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
+    if not published:
+        date_match = re.search(
+            r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+"
+            r"(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+"
+            r"\d{1,2},\s+\d{4}",
+            page_text,
+            flags=re.I,
+        )
+        published = date_match.group(0) if date_match else ""
+    if not author:
+        author_match = re.search(r"\bBy\s+([A-Z][A-Za-z.' -]{2,50})\s+(?=[A-Z])", page_text)
+        author = author_match.group(1).strip() if author_match else ""
+
+    # FCW wraps the page in an ASP.NET form, so removing all form nodes would
+    # also delete the article itself.
+    for node in soup.select("script, style, noscript, nav, header, footer, aside"):
+        node.decompose()
+
+    candidates = []
+    for selector in (
+        "article", '[itemprop="articleBody"]', ".article-body", ".article-content",
+        ".story-body", ".entry-content", ".post-content", ".news-detail",
+        ".body-copy", ".page-content.mod-details", "main",
+    ):
+        for container in soup.select(selector):
+            paragraphs = []
+            for paragraph in container.find_all(["p", "h2", "h3"], recursive=True):
+                text = re.sub(r"\s+", " ", paragraph.get_text(" ", strip=True)).strip()
+                if len(text) >= 35 and not re.search(r"subscribe|newsletter|advertis|copyright", text, re.I):
+                    paragraphs.append(text)
+            # FCW currently places article copy inside a div with line breaks
+            # instead of semantic paragraph tags.
+            if not paragraphs and (
+                container.select_one(".body-copy") is not None
+                or "body-copy" in (container.get("class") or [])
+            ):
+                text = re.sub(r"\s+", " ", container.get_text(" ", strip=True)).strip()
+                if len(text) >= 350:
+                    paragraphs.append(text)
+            body = "\n".join(dict.fromkeys(paragraphs))
+            if body:
+                candidates.append(body)
+
+    body = max(candidates, key=len, default="")
+    if len(body) < 350:
+        fallback = []
+        for paragraph in soup.find_all("p"):
+            text = re.sub(r"\s+", " ", paragraph.get_text(" ", strip=True)).strip()
+            if len(text) >= 45 and not re.search(r"subscribe|newsletter|advertis|copyright", text, re.I):
+                fallback.append(text)
+        body = "\n".join(dict.fromkeys(fallback))
+
+    if len(body) < 350:
+        return {
+            "ok": False,
+            "url": url,
+            "title": title,
+            "published": published,
+            "error": "The public article body could not be extracted reliably.",
+        }
+
+    return {
+        "ok": True,
+        "url": url,
+        "title": title or parsed.path.rstrip("/").split("/")[-1].replace("-", " ").title(),
+        "published": published,
+        "author": author,
+        "description": description,
+        "text": body[:18000],
+        "source": "Floor Covering Weekly" if "floorcoveringweekly" in parsed.netloc else "Floor Covering News",
+        "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+
+
+def _market_relevance(item):
+    title = str(item.get("title") or "").lower()
+    haystack = f"{title} {item.get('summary', '')}".lower()
+    return sum(3 if keyword in title else 1 for keyword in MARKET_ARTICLE_KEYWORDS if keyword in haystack)
+
+
+@st.cache_data(ttl=1800)
+def collect_fcw_market_articles(primary_url, limit=4):
+    """Collect one selected FCW article plus a few current, relevant FCW articles."""
+    articles = []
+    errors = []
+    primary = fetch_article_content(primary_url)
+    if primary.get("ok"):
+        primary["role"] = "Primary article"
+        articles.append(primary)
+    else:
+        errors.append(primary.get("error", "Primary article could not be read."))
+
+    candidates = []
+    seen = {str(primary_url).rstrip("/")}
+    for category in ("Features", "Retail", "Business Builder", "All Latest"):
+        for item in fetch_fcw_news(category, limit=12):
+            link = str(item.get("link") or "").rstrip("/")
+            relevance = _market_relevance(item)
+            if not link or link in seen or relevance <= 0:
+                continue
+            seen.add(link)
+            candidates.append((relevance, item))
+
+    candidates.sort(key=lambda pair: pair[0], reverse=True)
+    for _, item in candidates:
+        if len(articles) >= max(1, min(int(limit), 6)):
+            break
+        article = fetch_article_content(item.get("link"))
+        if article.get("ok"):
+            article["role"] = "Related current article"
+            articles.append(article)
+
+    return {"ok": bool(articles and primary.get("ok")), "articles": articles, "errors": errors}
+
+
+def _extract_json_object(text):
+    cleaned = str(text or "").strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("The model did not return a JSON object.")
+    return json.loads(cleaned[start:end + 1])
+
+
+@st.cache_data(ttl=1800)
+def analyze_resilient_market_articles(api_key, articles, indicators):
+    """Synthesize article evidence and live indicators into a governed executive readout."""
+    if not api_key:
+        return {"ok": False, "error": "ANTHROPIC_API_KEY is not configured."}
+    valid_articles = [article for article in (articles or []) if article.get("ok") and article.get("text")]
+    if not valid_articles:
+        return {"ok": False, "error": "No verified article body is available for analysis."}
+
+    evidence_blocks = []
+    for index, article in enumerate(valid_articles[:5], 1):
+        evidence_blocks.append(
+            "\n".join([
+                f"ARTICLE {index}",
+                f"Title: {article.get('title', '')}",
+                f"Source: {article.get('source', '')}",
+                f"Published: {article.get('published', '') or 'Not stated'}",
+                f"URL: {article.get('url', '')}",
+                "Body:",
+                str(article.get("text", ""))[:9000],
+            ])
+        )
+
+    prompt = f"""You are preparing an internal executive brief for a Korean LVT export sales team.
+Analyze the public flooring-industry articles and the platform indicators below to explain current U.S. domestic demand and resilient-flooring order conditions.
+
+GOVERNANCE RULES
+- Write every reader-facing field in concise, professional Korean.
+- Do not invent facts, dates, quotations, causal claims, or numbers.
+- Treat articles as qualitative industry evidence, not as a statistical sample.
+- Treat indicators as directional evidence. Do not claim that they prove KCC order causality.
+- Separate confirmed alignment, disagreement, and residual uncertainty.
+- If evidence conflicts, say so explicitly.
+- Avoid sales promises, forecasts, and unsupported recommendations.
+
+PLATFORM INDICATORS (JSON)
+{json.dumps(indicators or {}, ensure_ascii=False, default=str)}
+
+PUBLIC ARTICLE EVIDENCE
+{chr(10).join(evidence_blocks)}
+
+Return JSON only with this exact shape:
+{{
+  "status": "압박|둔화|혼조|안정화|회복",
+  "confidence": "낮음|보통|높음",
+  "headline": "one answer-first sentence",
+  "executive_summary": ["2-3 concise bullets"],
+  "drivers": [
+    {{"driver": "Demand or channel driver", "direction": "negative|neutral|positive", "article_evidence": "what articles support", "indicator_evidence": "what indicators support or contradict", "implication": "so what for resilient orders"}}
+  ],
+  "channels": [
+    {{"channel": "Residential / Remodel|Builder / New Construction|Commercial", "status": "weak|mixed|stable|firm", "read": "concise evidence-based read"}}
+  ],
+  "order_gap_explanation": ["up to 3 evidence-based explanations"],
+  "watch_items": ["3 monitoring points with no forecast"],
+  "contradictions": ["evidence gaps or conflicts"],
+  "caveat": "one concise limitation statement"
+}}
+"""
+
+    try:
+        client = _get_client(api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2400,
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = _extract_json_object(message.content[0].text)
+        required = {"status", "confidence", "headline", "executive_summary", "drivers", "channels", "watch_items", "caveat"}
+        missing = sorted(required.difference(result))
+        if missing:
+            raise ValueError(f"Missing analysis fields: {', '.join(missing)}")
+        result["ok"] = True
+        result["generated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        return result
+    except Exception as exc:
+        return {"ok": False, "error": f"LLM analysis failed: {exc}"}

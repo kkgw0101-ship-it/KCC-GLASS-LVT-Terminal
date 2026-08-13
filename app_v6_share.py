@@ -34,6 +34,7 @@ import llm_analysis as llm
 from customer_brief import create_customer_market_signal_pdf
 from design_brief import create_customer_design_signal_pdf
 from integrated_brief import create_customer_integrated_signal_pdf
+from resilient_pulse import create_resilient_market_pulse_pdf
 
 st.set_page_config(
     page_title="KCC Glass | LVT Terminal",
@@ -3446,6 +3447,215 @@ elif menu == "📊 Overview":
             f"kcc_lvt_all_indicators_{datetime.now().strftime('%Y%m%d')}.xlsx",
             "overview_excel_download",
         )
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="panel"><div class="p-head"><span class="p-t">U.S. Resilient Market Pulse</span>'
+        '<span class="p-m">FCW evidence + platform indicators</span></div><div class="p-body">',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="report-note"><b>활용 방식</b> 대표 FCW 기사의 공개 본문과 관련 최신 기사를 읽고, '
+        '주택·금리·재고·건자재 유통 지표와 대조해 미국 내수 및 Resilient 주문 환경을 진단합니다. '
+        '기사는 정성 근거이며, 자사 수주 감소의 직접 원인으로 단정하지 않습니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    pulse_metrics = [
+        {
+            "label": "Housing Starts",
+            "value": f"{v_housing:,.0f}K",
+            "change": f"MoM {d_housing:+.1f}%",
+            "asof": last_valid_date(df_housing, "주택착공"),
+        },
+        {
+            "label": "Building Permits",
+            "value": f"{v_permits:,.0f}K",
+            "change": f"MoM {d_permits:+.1f}%",
+            "asof": last_valid_date(df_permits, "건축허가"),
+        },
+        {
+            "label": "Existing Sales",
+            "value": f"{v_existing:,.2f}",
+            "change": f"MoM {d_existing:+.1f}%",
+            "asof": last_valid_date(df_existing_sales, "기존주택판매"),
+        },
+        {
+            "label": "Monthly Supply",
+            "value": f"{v_supply:.1f} mo",
+            "change": f"MoM {d_supply:+.1f}%",
+            "asof": last_valid_date(df_month_supply, "신규주택재고개월"),
+        },
+        {
+            "label": "30Y Mortgage",
+            "value": f"{v_mortgage:.2f}%",
+            "change": f"WoW {d_mortgage:+.1f}%",
+            "asof": last_valid_date(df_mortgage, "모기지금리"),
+        },
+        {
+            "label": "Building Retail",
+            "value": f"{v_building_retail:,.1f}",
+            "change": f"MoM {d_building_retail:+.1f}%",
+            "asof": last_valid_date(df_building_retail, "건자재유통매출"),
+        },
+    ]
+    pulse_indicators = {
+        metric["label"]: {
+            "latest": metric["value"],
+            "change": metric["change"],
+            "data_as_of": metric["asof"],
+        }
+        for metric in pulse_metrics
+    }
+    pulse_indicators.update({
+        "New Home Sales": {
+            "latest": f"{v_newsales:,.0f}K",
+            "change": f"MoM {d_newsales:+.1f}%",
+            "data_as_of": last_valid_date(df_newsales, "신규주택판매"),
+        },
+        "Housing Completions": {
+            "latest": f"{v_complete:,.0f}K",
+            "change": f"MoM {d_complete:+.1f}%",
+            "data_as_of": last_valid_date(df_complete, "주택완공"),
+        },
+        "CPI": {
+            "latest": f"{v_cpi:.1f}",
+            "change": f"MoM {d_cpi:+.1f}%",
+            "data_as_of": last_valid_date(df_cpi, "CPI"),
+        },
+        "SCFI": {
+            "latest": f"{v_scfi:,.1f}",
+            "change": f"4W {d_scfi:+.1f}%",
+            "data_as_of": freight_asof,
+            "role": "Secondary landed-cost context, not U.S. demand evidence",
+        },
+    })
+
+    pulse_url_col, pulse_action_col = st.columns([4, 1], gap="medium")
+    with pulse_url_col:
+        pulse_article_url = st.text_input(
+            "대표 기사 URL",
+            value="https://www.floorcoveringweekly.com/main/features/domestic-supply-stays-steady-46978",
+            key="resilient_pulse_article_url",
+            help="공개된 Floor Covering Weekly 또는 Floor Covering News 기사 URL을 입력합니다.",
+        )
+    with pulse_action_col:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        run_pulse = st.button(
+            "기사·지표 종합 분석",
+            key="run_resilient_market_pulse",
+            use_container_width=True,
+            type="primary",
+        )
+
+    if run_pulse:
+        if not anthropic_key:
+            st.error("ANTHROPIC_API_KEY가 설정되지 않아 기사 종합 분석을 실행할 수 없습니다.")
+        else:
+            with st.spinner("대표 기사와 관련 최신 기사를 확인하고 플랫폼 지표와 대조하는 중입니다..."):
+                source_bundle = llm.collect_fcw_market_articles(pulse_article_url, limit=4)
+                if not source_bundle.get("ok"):
+                    st.session_state.pop("resilient_pulse_bundle", None)
+                    st.error("대표 기사 본문을 신뢰성 있게 읽지 못해 분석과 PDF 생성을 중단했습니다.")
+                    for error in source_bundle.get("errors", []):
+                        st.caption(error)
+                else:
+                    pulse_analysis = llm.analyze_resilient_market_articles(
+                        anthropic_key,
+                        source_bundle.get("articles", []),
+                        pulse_indicators,
+                    )
+                    if pulse_analysis.get("ok"):
+                        st.session_state["resilient_pulse_bundle"] = {
+                            "analysis": pulse_analysis,
+                            "articles": source_bundle.get("articles", []),
+                            "metrics": pulse_metrics,
+                            "indicators": pulse_indicators,
+                            "primary_url": pulse_article_url,
+                        }
+                        st.success(
+                            f"분석 완료: 대표 기사와 관련 기사 {len(source_bundle.get('articles', [])) - 1}건을 "
+                            "플랫폼 지표와 대조했습니다."
+                        )
+                    else:
+                        st.session_state.pop("resilient_pulse_bundle", None)
+                        st.error(pulse_analysis.get("error", "LLM 종합 분석에 실패했습니다."))
+
+    pulse_bundle = st.session_state.get("resilient_pulse_bundle")
+    if pulse_bundle:
+        pulse_analysis = pulse_bundle["analysis"]
+        status = html.escape(str(pulse_analysis.get("status") or "N/A"))
+        confidence = html.escape(str(pulse_analysis.get("confidence") or "N/A"))
+        headline = html.escape(str(pulse_analysis.get("headline") or ""))
+        summary_html = "".join(
+            f"<li>{html.escape(str(item))}</li>"
+            for item in list(pulse_analysis.get("executive_summary") or [])[:3]
+        )
+        st.markdown(
+            f"""
+            <div class="summary-grid" style="grid-template-columns:0.55fr 2.45fr;">
+              <div class="summary-card"><div class="summary-k">Market read</div>
+                <div class="summary-v">{status}</div><div class="summary-k">Confidence · {confidence}</div></div>
+              <div class="summary-card"><div class="summary-k">Executive answer</div>
+                <div class="summary-v">{headline}</div><ul style="margin:8px 0 0 18px;">{summary_html}</ul></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        driver_rows = []
+        for driver in list(pulse_analysis.get("drivers") or [])[:4]:
+            driver_rows.append({
+                "Driver": driver.get("driver", ""),
+                "Direction": driver.get("direction", ""),
+                "Article evidence": driver.get("article_evidence", ""),
+                "Indicator check": driver.get("indicator_evidence", ""),
+                "Implication": driver.get("implication", ""),
+            })
+        if driver_rows:
+            st.dataframe(pd.DataFrame(driver_rows), use_container_width=True, hide_index=True)
+
+        with st.expander("분석에 사용한 기사 및 해석 한계", expanded=False):
+            for index, article in enumerate(pulse_bundle.get("articles", []), 1):
+                title = html.escape(str(article.get("title") or "Untitled"))
+                link = html.escape(str(article.get("url") or ""), quote=True)
+                source = html.escape(str(article.get("source") or ""))
+                published = html.escape(str(article.get("published") or "Date not stated"))
+                st.markdown(f"{index}. [{title}]({link}) · {source} · {published}")
+            st.caption(pulse_analysis.get("caveat", "기사 표본과 공개 거시지표만으로 자사 수주 변동의 직접 인과를 확정할 수 없습니다."))
+
+        review_ready = st.checkbox(
+            "기사 원문, 지표 기준일, 해석 문구를 확인했습니다.",
+            key="resilient_pulse_reviewed",
+        )
+        if review_ready:
+            pulse_logo = next(
+                (
+                    os.path.join(APP_DIR, filename)
+                    for filename in ("kcc_glass_ci_full_color.png", "logo_navy_t.png")
+                    if os.path.isfile(os.path.join(APP_DIR, filename))
+                ),
+                None,
+            )
+            try:
+                pulse_pdf = create_resilient_market_pulse_pdf(
+                    pulse_analysis,
+                    pulse_bundle.get("metrics", []),
+                    pulse_bundle.get("articles", []),
+                    config={"primary_url": pulse_bundle.get("primary_url", "")},
+                    logo_path=pulse_logo,
+                )
+                st.download_button(
+                    "U.S. Resilient Market Pulse 1페이지 PDF 다운로드",
+                    data=pulse_pdf,
+                    file_name=f"kcc_us_resilient_market_pulse_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except Exception as exc:
+                st.error(f"PDF 생성 오류: {exc}")
+    else:
+        st.caption("분석을 실행하기 전에는 보고서가 생성되지 않습니다. 대표 기사 본문 수집 실패 시에도 PDF를 만들지 않습니다.")
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════

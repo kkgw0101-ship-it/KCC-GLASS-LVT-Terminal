@@ -8,7 +8,10 @@ Streamlit Community Cloud 배포용 공유 버전입니다.
 - `customer_brief.py`
 - `design_brief.py`
 - `integrated_brief.py`
+- `resilient_pulse.py`
 - `llm_analysis.py`
+- `NotoSansKR-Regular.ttf`
+- `NotoSansKR-Bold.ttf`
 - `logo_white_t.png`
 - `logo_navy_t.png`
 - `kcc_glass_ci_full_color.png`

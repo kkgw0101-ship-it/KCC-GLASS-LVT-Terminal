@@ -497,14 +497,241 @@ def _extract_json_object(text):
     return json.loads(cleaned[start:end + 1])
 
 
-@st.cache_data(ttl=1800)
+def _indicator_change(indicators, label):
+    item = dict((indicators or {}).get(label) or {})
+    match = re.search(r"([+-]\d+(?:\.\d+)?)\s*%", str(item.get("change") or ""))
+    return float(match.group(1)) if match else None
+
+
+def _indicator_sentence(indicators, labels):
+    parts = []
+    for label in labels:
+        item = dict((indicators or {}).get(label) or {})
+        if not item:
+            continue
+        parts.append(
+            f"{label} {item.get('latest', 'N/A')} "
+            f"({item.get('change', 'change N/A')}, as of {item.get('data_as_of', 'N/A')})"
+        )
+    return "; ".join(parts) or "직접 비교 가능한 지표가 없습니다."
+
+
+def _article_topic_count(articles, terms):
+    text = " ".join(str(article.get("text") or "").lower() for article in articles or [])
+    return sum(len(re.findall(rf"\b{re.escape(term.lower())}\b", text)) for term in terms)
+
+
+def _topic_evidence(articles, label, terms):
+    hits = _article_topic_count(articles, terms)
+    article_count = len(articles or [])
+    if hits:
+        return f"수집 기사 {article_count}건에서 {label} 관련 표현이 {hits}회 확인됩니다."
+    return f"수집 기사 {article_count}건에서는 {label} 관련 직접 표현이 제한적입니다."
+
+
+def _fallback_reason_text(error):
+    text = str(error or "").lower()
+    if "credit balance" in text or "billing" in text:
+        return "Anthropic API credit unavailable"
+    if "authentication" in text or "api key" in text or "401" in text:
+        return "Anthropic API authentication unavailable"
+    if "rate limit" in text or "429" in text:
+        return "Anthropic API rate limit"
+    if "timeout" in text or "connection" in text:
+        return "Anthropic API connection unavailable"
+    return "Anthropic API response unavailable"
+
+
+def rule_based_resilient_market_analysis(articles, indicators, reason="Anthropic API unavailable"):
+    """Build a transparent, deterministic fallback from article topics and indicator directions."""
+    valid_articles = [article for article in (articles or []) if article.get("ok") and article.get("text")]
+    if not valid_articles:
+        return {"ok": False, "error": "No verified article body is available for fallback analysis."}
+
+    changes = {
+        label: _indicator_change(indicators, label)
+        for label in (
+            "Housing Starts", "Building Permits", "Existing Sales", "Monthly Supply",
+            "30Y Mortgage", "Building Retail", "New Home Sales", "Housing Completions",
+        )
+    }
+
+    pressure_score = 0
+    for label in ("Housing Starts", "Building Permits", "Existing Sales", "Building Retail", "New Home Sales"):
+        value = changes.get(label)
+        if value is not None:
+            pressure_score += -1 if value < 0 else 1 if value > 0 else 0
+    for label in ("Monthly Supply", "30Y Mortgage"):
+        value = changes.get(label)
+        if value is not None:
+            pressure_score += -1 if value > 0 else 1 if value < 0 else 0
+
+    negative_terms = ("slow", "soft", "decline", "weak", "pressure", "cautious", "uncertain", "downturn")
+    positive_terms = ("steady", "stable", "strong", "improve", "growth", "recovery")
+    article_balance = min(_article_topic_count(valid_articles, positive_terms), 3) - min(
+        _article_topic_count(valid_articles, negative_terms), 3
+    )
+    combined_score = pressure_score + (1 if article_balance > 0 else -1 if article_balance < 0 else 0)
+
+    if combined_score <= -4:
+        status = "압박"
+        headline = "주택·금융·유통 지표가 Resilient 주문 환경에 복합적인 하방 압력을 나타냅니다."
+    elif combined_score <= -2:
+        status = "둔화"
+        headline = "미국 주거 수요와 유통 신호가 약해 Resilient 주문 회복은 제한적으로 보입니다."
+    elif combined_score >= 4:
+        status = "회복"
+        headline = "주택 및 유통 지표가 개선되며 Resilient 주문 환경에 회복 신호가 나타납니다."
+    elif combined_score >= 2:
+        status = "안정화"
+        headline = "일부 수요 지표가 개선되지만 Resilient 주문 회복 여부는 추가 확인이 필요합니다."
+    else:
+        status = "혼조"
+        headline = "미국 내 공급과 수요 지표가 엇갈려 Resilient 주문 환경은 혼조로 판단됩니다."
+
+    available_changes = sum(value is not None for value in changes.values())
+    confidence = "보통" if len(valid_articles) >= 2 and available_changes >= 5 else "낮음"
+
+    starts = changes.get("Housing Starts")
+    permits = changes.get("Building Permits")
+    existing = changes.get("Existing Sales")
+    retail = changes.get("Building Retail")
+    mortgage = changes.get("30Y Mortgage")
+    supply = changes.get("Monthly Supply")
+
+    residential_status = "weak" if sum(
+        value < 0 for value in (existing, retail) if value is not None
+    ) >= 1 or (mortgage is not None and mortgage > 0) else "mixed"
+    builder_values = [value for value in (starts, permits) if value is not None]
+    builder_status = (
+        "weak" if builder_values and all(value < 0 for value in builder_values)
+        else "stable" if builder_values and all(value > 0 for value in builder_values)
+        else "mixed"
+    )
+
+    demand_evidence = _topic_evidence(
+        valid_articles, "housing·residential·remodel 수요",
+        ("housing", "residential", "remodel", "demand", "sales", "orders"),
+    )
+    finance_evidence = _topic_evidence(
+        valid_articles, "금리·구매여력",
+        ("mortgage", "rate", "rates", "affordability", "financing"),
+    )
+    inventory_evidence = _topic_evidence(
+        valid_articles, "재고·공급·미국 내 생산",
+        ("inventory", "supply", "domestic", "manufacturing", "production"),
+    )
+    channel_evidence = _topic_evidence(
+        valid_articles, "유통·리테일 채널",
+        ("retail", "dealer", "distributor", "channel", "sell-through"),
+    )
+
+    summary = [
+        (
+            f"수요 지표 방향 점수는 {pressure_score:+d}이며, "
+            f"{_indicator_sentence(indicators, ['Existing Sales', 'Building Retail'])}를 함께 확인했습니다."
+        ),
+        (
+            f"신규 주택 파이프라인은 "
+            f"{_indicator_sentence(indicators, ['Housing Starts', 'Building Permits', 'Housing Completions'])}로 "
+            "지표 간 방향 일치 여부를 구분해 봐야 합니다."
+        ),
+        (
+            f"기사에서는 공급·수요 주제가 함께 나타나지만, 공급 안정이 최종 수요 회복을 의미하지는 않습니다. "
+            f"현재 분석은 {reason}에 따른 규칙 기반 대체 판정입니다."
+        ),
+    ]
+
+    return {
+        "ok": True,
+        "analysis_mode": "Rule-based fallback",
+        "fallback_reason": reason,
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "status": status,
+        "confidence": confidence,
+        "headline": headline,
+        "executive_summary": summary,
+        "drivers": [
+            {
+                "driver": "주택·리모델 수요",
+                "direction": "negative" if residential_status == "weak" else "neutral",
+                "article_evidence": demand_evidence,
+                "indicator_evidence": _indicator_sentence(
+                    indicators, ["Existing Sales", "Building Retail", "New Home Sales"]
+                ),
+                "implication": "주거·리모델 채널의 보충 주문 속도를 보수적으로 점검해야 합니다.",
+            },
+            {
+                "driver": "금융 여건",
+                "direction": "negative" if mortgage is not None and mortgage > 0 else "neutral",
+                "article_evidence": finance_evidence,
+                "indicator_evidence": _indicator_sentence(indicators, ["30Y Mortgage"]),
+                "implication": "금리 방향과 기존주택 거래 회복이 동시에 나타나는지 확인해야 합니다.",
+            },
+            {
+                "driver": "재고·공급",
+                "direction": "negative" if supply is not None and supply > 0 else "neutral",
+                "article_evidence": inventory_evidence,
+                "indicator_evidence": _indicator_sentence(indicators, ["Monthly Supply"]),
+                "implication": "공급 안정과 수요 회복을 분리하고 유통 재고 조정 여부를 확인해야 합니다.",
+            },
+            {
+                "driver": "유통 채널",
+                "direction": "negative" if retail is not None and retail < 0 else "neutral",
+                "article_evidence": channel_evidence,
+                "indicator_evidence": _indicator_sentence(indicators, ["Building Retail"]),
+                "implication": "출하보다 실제 sell-through와 재주문 시점을 함께 점검해야 합니다.",
+            },
+        ],
+        "channels": [
+            {
+                "channel": "Residential / Remodel",
+                "status": residential_status,
+                "read": "기존주택판매·모기지·건자재 유통매출을 함께 본 규칙 기반 판정입니다.",
+            },
+            {
+                "channel": "Builder / New Construction",
+                "status": builder_status,
+                "read": "착공·허가·완공의 방향 일치 여부를 기준으로 판단했습니다.",
+            },
+            {
+                "channel": "Commercial",
+                "status": "mixed",
+                "read": "플랫폼에 직접 대응하는 상업용 수요 지표가 없어 기사 언급 범위만 참고합니다.",
+            },
+        ],
+        "order_gap_explanation": [
+            "높은 금융비용과 느린 주택 회전이 리모델링 의사결정을 늦출 수 있습니다.",
+            "유통 채널의 재고 보수 운영이 최종 수요보다 주문 감소폭을 키울 수 있습니다.",
+            "미국 내 공급 안정 또는 확대가 수입 제품의 주문 경쟁에 영향을 줄 수 있습니다.",
+        ],
+        "watch_items": [
+            "기존주택판매와 30년 모기지 금리의 동시 개선 여부",
+            "건자재 유통매출과 실제 sell-through의 회복 여부",
+            "신규주택 재고개월 및 유통 재고 조정 종료 신호",
+        ],
+        "contradictions": [
+            "기사의 공급 안정 신호와 거시 수요 회복은 동일한 의미가 아닙니다.",
+            "상업용 채널은 직접 대응하는 정량 지표가 부족합니다.",
+        ],
+        "caveat": (
+            "공개 기사 키워드와 거시지표 방향을 이용한 규칙 기반 판정이며, "
+            "자사 수주 감소의 직접 인과나 수요 전망을 확정하지 않습니다."
+        ),
+    }
+
+
 def analyze_resilient_market_articles(api_key, articles, indicators):
     """Synthesize article evidence and live indicators into a governed executive readout."""
-    if not api_key:
-        return {"ok": False, "error": "ANTHROPIC_API_KEY is not configured."}
     valid_articles = [article for article in (articles or []) if article.get("ok") and article.get("text")]
     if not valid_articles:
         return {"ok": False, "error": "No verified article body is available for analysis."}
+    if not api_key:
+        return rule_based_resilient_market_analysis(
+            valid_articles,
+            indicators,
+            reason="ANTHROPIC_API_KEY not configured",
+        )
 
     evidence_blocks = []
     for index, article in enumerate(valid_articles[:5], 1):
@@ -571,7 +798,12 @@ Return JSON only with this exact shape:
         if missing:
             raise ValueError(f"Missing analysis fields: {', '.join(missing)}")
         result["ok"] = True
+        result["analysis_mode"] = "Claude LLM"
         result["generated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
         return result
     except Exception as exc:
-        return {"ok": False, "error": f"LLM analysis failed: {exc}"}
+        return rule_based_resilient_market_analysis(
+            valid_articles,
+            indicators,
+            reason=_fallback_reason_text(exc),
+        )

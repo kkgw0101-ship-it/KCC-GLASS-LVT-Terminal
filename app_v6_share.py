@@ -3549,43 +3549,49 @@ elif menu == "📊 Overview":
         )
 
     if run_pulse:
-        if not anthropic_key:
-            st.error("ANTHROPIC_API_KEY가 설정되지 않아 기사 종합 분석을 실행할 수 없습니다.")
-        else:
-            with st.spinner("대표 기사와 관련 최신 기사를 확인하고 플랫폼 지표와 대조하는 중입니다..."):
-                source_bundle = llm.collect_fcw_market_articles(pulse_article_url, limit=4)
-                if not source_bundle.get("ok"):
-                    st.session_state.pop("resilient_pulse_bundle", None)
-                    st.error("대표 기사 본문을 신뢰성 있게 읽지 못해 분석과 PDF 생성을 중단했습니다.")
-                    for error in source_bundle.get("errors", []):
-                        st.caption(error)
-                else:
-                    pulse_analysis = llm.analyze_resilient_market_articles(
-                        anthropic_key,
-                        source_bundle.get("articles", []),
-                        pulse_indicators,
-                    )
-                    if pulse_analysis.get("ok"):
-                        st.session_state["resilient_pulse_bundle"] = {
-                            "analysis": pulse_analysis,
-                            "articles": source_bundle.get("articles", []),
-                            "metrics": pulse_metrics,
-                            "indicators": pulse_indicators,
-                            "primary_url": pulse_article_url,
-                        }
+        with st.spinner("대표 기사와 관련 최신 기사를 확인하고 플랫폼 지표와 대조하는 중입니다..."):
+            source_bundle = llm.collect_fcw_market_articles(pulse_article_url, limit=4)
+            if not source_bundle.get("ok"):
+                st.session_state.pop("resilient_pulse_bundle", None)
+                st.error("대표 기사 본문을 신뢰성 있게 읽지 못해 분석과 PDF 생성을 중단했습니다.")
+                for error in source_bundle.get("errors", []):
+                    st.caption(error)
+            else:
+                pulse_analysis = llm.analyze_resilient_market_articles(
+                    anthropic_key,
+                    source_bundle.get("articles", []),
+                    pulse_indicators,
+                )
+                if pulse_analysis.get("ok"):
+                    st.session_state["resilient_pulse_bundle"] = {
+                        "analysis": pulse_analysis,
+                        "articles": source_bundle.get("articles", []),
+                        "metrics": pulse_metrics,
+                        "indicators": pulse_indicators,
+                        "primary_url": pulse_article_url,
+                    }
+                    analysis_mode = pulse_analysis.get("analysis_mode", "Unknown")
+                    if analysis_mode == "Claude LLM":
                         st.success(
-                            f"분석 완료: 대표 기사와 관련 기사 {len(source_bundle.get('articles', [])) - 1}건을 "
-                            "플랫폼 지표와 대조했습니다."
+                            f"Claude 분석 완료: 대표 기사와 관련 기사 "
+                            f"{len(source_bundle.get('articles', [])) - 1}건을 플랫폼 지표와 대조했습니다."
                         )
                     else:
-                        st.session_state.pop("resilient_pulse_bundle", None)
-                        st.error(pulse_analysis.get("error", "LLM 종합 분석에 실패했습니다."))
+                        st.warning(
+                            f"규칙 기반 대체 분석 완료: 대표 기사와 관련 기사 "
+                            f"{len(source_bundle.get('articles', [])) - 1}건을 지표 방향과 대조했습니다. "
+                            f"전환 사유: {pulse_analysis.get('fallback_reason', 'Anthropic API unavailable')}"
+                        )
+                else:
+                    st.session_state.pop("resilient_pulse_bundle", None)
+                    st.error(pulse_analysis.get("error", "기사·지표 종합 분석에 실패했습니다."))
 
     pulse_bundle = st.session_state.get("resilient_pulse_bundle")
     if pulse_bundle:
         pulse_analysis = pulse_bundle["analysis"]
         status = html.escape(str(pulse_analysis.get("status") or "N/A"))
         confidence = html.escape(str(pulse_analysis.get("confidence") or "N/A"))
+        analysis_mode = html.escape(str(pulse_analysis.get("analysis_mode") or "Unknown"))
         headline = html.escape(str(pulse_analysis.get("headline") or ""))
         summary_html = "".join(
             f"<li>{html.escape(str(item))}</li>"
@@ -3595,7 +3601,8 @@ elif menu == "📊 Overview":
             f"""
             <div class="summary-grid" style="grid-template-columns:0.55fr 2.45fr;">
               <div class="summary-card"><div class="summary-k">Market read</div>
-                <div class="summary-v">{status}</div><div class="summary-k">Confidence · {confidence}</div></div>
+                <div class="summary-v">{status}</div><div class="summary-k">Confidence · {confidence}</div>
+                <div class="summary-k">Method · {analysis_mode}</div></div>
               <div class="summary-card"><div class="summary-k">Executive answer</div>
                 <div class="summary-v">{headline}</div><ul style="margin:8px 0 0 18px;">{summary_html}</ul></div>
             </div>
@@ -3623,6 +3630,11 @@ elif menu == "📊 Overview":
                 published = html.escape(str(article.get("published") or "Date not stated"))
                 st.markdown(f"{index}. [{title}]({link}) · {source} · {published}")
             st.caption(pulse_analysis.get("caveat", "기사 표본과 공개 거시지표만으로 자사 수주 변동의 직접 인과를 확정할 수 없습니다."))
+            if pulse_analysis.get("analysis_mode") == "Rule-based fallback":
+                st.info(
+                    "현재 결과는 Claude 문장 추론이 아니라 기사 키워드와 지표 방향을 이용한 규칙 기반 대체 분석입니다. "
+                    f"전환 사유: {pulse_analysis.get('fallback_reason', 'Anthropic API unavailable')}"
+                )
 
         review_ready = st.checkbox(
             "기사 원문, 지표 기준일, 해석 문구를 확인했습니다.",

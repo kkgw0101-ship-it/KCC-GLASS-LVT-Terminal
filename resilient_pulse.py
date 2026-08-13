@@ -324,7 +324,9 @@ def create_resilient_market_pulse_pdf(analysis, metrics, articles, config=None, 
 
     story.append(Paragraph("U.S. Resilient Market Pulse", styles["title"]))
     story.append(Paragraph(
-        f"미국 내수·Resilient 주문 환경 진단  |  지표 기준일 개별 표기  |  분석 생성 {generated}",
+        f"미국 내수·Resilient 주문 환경 진단  |  "
+        f"Method: {_escape(analysis.get('analysis_mode') or 'Unknown')}  |  "
+        f"지표 기준일 개별 표기  |  분석 생성 {generated}",
         styles["subtitle"],
     ))
     story.append(Spacer(1, 2.2 * mm))
@@ -352,6 +354,11 @@ def create_resilient_market_pulse_pdf(analysis, metrics, articles, config=None, 
 
     contradictions = list(analysis.get("contradictions") or [])[:2]
     caveat_parts = [_short(analysis.get("caveat"), 180)] + [_short(item, 110) for item in contradictions]
+    if analysis.get("analysis_mode") == "Rule-based fallback":
+        caveat_parts.insert(
+            0,
+            f"Rule-based fallback ({analysis.get('fallback_reason') or 'Anthropic API unavailable'})",
+        )
     caveat_text = "  ".join(part for part in caveat_parts if part)
     story.append(Spacer(1, 1.8 * mm))
     story.append(Table([[Paragraph(f"<b>해석 유의:</b> {_escape(caveat_text)}", styles["small"])]], colWidths=[176 * mm], style=TableStyle([
